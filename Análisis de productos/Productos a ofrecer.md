@@ -1,0 +1,13 @@
+- Créditos de IA (un solo paquete con 200 créditos, por ejemplo, no creo que vayan a necesitar demasiado)
+	- Los créditos serían más caros si se requiere de un modelo mayor. También deben de dejar un margen de ganancia mayor.
+- Suscripción anual de mantenimiento (dejando explícitas las tecnologías a las que damos soporte)
+	- Tecnologías a usar:
+		- Java, php, c# (Spring, Laravel, .net)
+		- Bases de datos: MariaDB, PostgreSQL
+		- Servidores: Tomcat, Plex, Nginx
+- Suscripción de desplegar la infraestructura con la propia empresa. La suscripción sería anual en pagos mensuales.
+	- Subproductos serían aquellos recursos del despliegue. Ello podría incluir:
+		- Núcleos de CPU
+		- Núcleos de GPU 
+		- RAM
+		- Almacenamiento
