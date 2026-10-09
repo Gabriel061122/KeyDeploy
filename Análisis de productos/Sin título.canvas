@@ -1,0 +1,8 @@
+{
+	"nodes":[
+		{"id":"17392fee5e8826a3","x":-700,"y":-360,"width":120,"height":80,"type":"text","text":"### Cliente\n"},
+		{"id":"76097a05ed30c5e3","type":"text","text":"### Aplicación","x":-180,"y":-620,"width":160,"height":60},
+		{"id":"a9eae086708d7c25","x":-280,"y":-460,"width":160,"height":60,"type":"text","text":"### Aplicación"}
+	],
+	"edges":[]
+}

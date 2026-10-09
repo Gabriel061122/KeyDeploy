@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Análisis de productos/Actores y flujos.md",
+                "file": "Análisis de productos/Resumen del debate de flujos.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Actores y flujos"
+              "title": "Resumen del debate de flujos"
             }
           },
           {
@@ -111,8 +111,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300,
-    "collapsed": true
+    "width": 300
   },
   "right": {
     "id": "8467193bc07bd8c2",
@@ -219,11 +218,13 @@
   },
   "active": "4fd31a181b13632b",
   "lastOpenFiles": [
-    "Análisis de productos/Marco de pensamiento.md",
-    "Análisis de productos/Lista Entidades.md",
-    "Análisis de productos/Actores y flujos.md",
     "Análisis de productos/Punto de partida.md",
     "Análisis de productos/Productos a ofrecer.md",
+    "Análisis de productos/Primera Lista Entidades.md",
+    "Análisis de productos/Marco de pensamiento.md",
+    "Análisis de productos/Actores y flujos.md",
+    "Análisis de productos/Resumen del debate de flujos.md",
+    "Análisis de productos/Lista Entidades.md",
     "Sin título 1.md",
     "Análisis de productos"
   ]
