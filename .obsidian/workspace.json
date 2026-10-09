@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Análisis de productos/Punto de partida.md",
+                "file": "Análisis de productos/Actores y flujos.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Punto de partida"
+              "title": "Actores y flujos"
             }
           },
           {
@@ -111,7 +111,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 300,
+    "collapsed": true
   },
   "right": {
     "id": "8467193bc07bd8c2",
@@ -218,9 +219,11 @@
   },
   "active": "4fd31a181b13632b",
   "lastOpenFiles": [
+    "Análisis de productos/Marco de pensamiento.md",
     "Análisis de productos/Lista Entidades.md",
-    "Análisis de productos/Productos a ofrecer.md",
+    "Análisis de productos/Actores y flujos.md",
     "Análisis de productos/Punto de partida.md",
+    "Análisis de productos/Productos a ofrecer.md",
     "Sin título 1.md",
     "Análisis de productos"
   ]
