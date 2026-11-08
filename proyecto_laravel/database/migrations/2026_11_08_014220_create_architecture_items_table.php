@@ -21,7 +21,7 @@ return new class extends Migration
             $table->foreignId('architecture_id')->constrained()->restrictOnDelete();
             $table->foreignId('product_id')->constrained()->restrictOnDelete();
             $table->unsignedInteger('quantity');
-            $table->json('config')->default('{}');
+            $table->json('config');
             $table->timestamps();
 
             $table->index('architecture_id');
