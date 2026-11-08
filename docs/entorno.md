@@ -137,8 +137,8 @@ La configuración descrita usa MySQL en lugar de SQLite:
 |---|---|
 | Servidor | MySQL Server 8.4.11 |
 | Puerto | 3306; conexión local en `127.0.0.1` |
-| Base de datos | `keydeploy`, con codificación `utf8mb4` |
-| Usuario de aplicación | `laravel_user`, con permisos sobre la base del proyecto |
+| Bases de datos | `keydeploy` (desarrollo) y `keydeploy_test` (pruebas), con codificación `utf8mb4` |
+| Usuario de aplicación | `laravel_user`, con permisos sobre ambas bases |
 
 Instalación y pasos de configuración propuestos:
 
@@ -152,11 +152,30 @@ Desde la consola de MySQL se propone crear la base de datos y un usuario local. 
 
 ```sql
 CREATE DATABASE keydeploy CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'laravel_user'@'localhost' IDENTIFIED BY '<contraseña local>';
-GRANT ALL PRIVILEGES ON keydeploy.* TO 'laravel_user'@'localhost';
+CREATE DATABASE keydeploy_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'laravel_user'@'127.0.0.1' IDENTIFIED BY '<contraseña local>';
+GRANT ALL PRIVILEGES ON keydeploy.* TO 'laravel_user'@'127.0.0.1';
+GRANT ALL PRIVILEGES ON keydeploy_test.* TO 'laravel_user'@'127.0.0.1';
 ```
 
-Laravel obtiene la conexión de las variables `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` y `DB_PASSWORD` del archivo local `.env`, mediante la configuración de `config/database.php` y PDO.
+En el proyecto, copia `.env.example` a `.env` y configura allí la contraseña
+local de `laravel_user`. El ejemplo utiliza `keydeploy` como base de desarrollo.
+Las pruebas fuerzan `DB_CONNECTION=mysql` y `DB_DATABASE=keydeploy_test` desde
+`phpunit.xml`, por lo que nunca deben ejecutarse contra la base de desarrollo.
+No configures `DB_URL` para las pruebas. Laravel obtiene el resto de parámetros
+(`DB_HOST`, `DB_PORT`, `DB_USERNAME` y `DB_PASSWORD`) del `.env` local mediante
+`config/database.php` y PDO.
+
+Comandos de uso habituales desde `proyecto_laravel/`:
+
+```bash
+php artisan migrate:fresh --seed
+php artisan test
+```
+
+`migrate:fresh --seed` elimina y vuelve a crear todas las tablas de la conexión
+activa; ejecútalo solo con `keydeploy` en desarrollo, nunca con datos que deban
+conservarse. `php artisan test` usa exclusivamente `keydeploy_test`.
 
 El archivo `.env` contiene configuración específica de cada entorno, incluida `APP_KEY` y las credenciales locales de base de datos. No debe publicarse ni incluir secretos en la documentación. El repositorio debe contener únicamente `.env.example` sin valores secretos; `.env` debe estar excluido mediante `.gitignore`.
 
@@ -234,4 +253,3 @@ La configuración de entorno debe mantenerse fuera del repositorio cuando incluy
 ## Archivos del repositorio relacionados
 
 La estructura descrita para la entrega incluye `docs/` y el proyecto Laravel en `proyecto_laravel/`, con archivos como `.env.example`, `.gitignore`, `README.md`, `composer.json` y `package.json`. Esta documentación se limita al entorno de desarrollo: no incorpora contenido de evidencias, capturas, historial de commits, contribuciones individuales ni conclusiones que dependan de comprobaciones del equipo.
-
