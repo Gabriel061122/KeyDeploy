@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Architecture;
+use App\Models\ArchitectureItem;
 use App\Models\Product;
 use App\Models\ProductAvailability;
 use App\Models\Project;
@@ -92,13 +93,18 @@ class ArchitectureBusinessRulesTest extends TestCase
             ['gte 9 vs 8: incumplido', 'integer', 'gte', '9', 'nucleos', '{"nucleos": "8"}', true],
             ['eq 10 vs "010": igualdad numérica', 'integer', 'eq', '10', 'nucleos', '{"nucleos": "010"}', false],
             ['eq 10 vs 11 con número JSON', 'integer', 'eq', '10', 'nucleos', '{"nucleos": 11}', true],
+            ['neq 10 vs 11: diferente numérico', 'integer', 'neq', '10', 'nucleos', '{"nucleos": "11"}', false],
+            ['neq 10 vs 10: igualdad bloquea', 'integer', 'neq', '10', 'nucleos', '{"nucleos": 10}', true],
             ['gt 9 vs "10": orden numérico', 'integer', 'gt', '9', 'nucleos', '{"nucleos": "10"}', false],
             ['lt 100 vs 99', 'integer', 'lt', '100', 'nucleos', '{"nucleos": 99}', false],
             ['decimal gt 3.5 vs 3.75', 'decimal', 'gt', '3.5', 'memoria', '{"memoria": "3.75"}', false],
             ['decimal gt 3.5 vs 3.49: incumplido', 'decimal', 'gt', '3.5', 'memoria', '{"memoria": "3.49"}', true],
             ['decimal lte 16.5 vs 16.5: borde inclusivo', 'decimal', 'lte', '16.5', 'memoria', '{"memoria": "16.5"}', false],
+            ['decimal neq 3.5 vs 3.75', 'decimal', 'neq', '3.5', 'memoria', '{"memoria": "3.75"}', false],
             ['string eq exacto', 'string', 'eq', 'Linux', 'so', '{"so": "Linux"}', false],
             ['string eq sensible a mayúsculas', 'string', 'eq', 'Linux', 'so', '{"so": "linux"}', true],
+            ['string neq sensible a mayúsculas', 'string', 'neq', 'Linux', 'so', '{"so": "linux"}', false],
+            ['string neq igualdad bloquea', 'string', 'neq', 'Linux', 'so', '{"so": "Linux"}', true],
             ['string contains satisfecho', 'string', 'contains', '16', 'software', '{"software": "Postgres 16"}', false],
             ['string contains incumplido', 'string', 'contains', 'ubuntu', 'software', '{"software": "Debian 12"}', true],
             ['string not_contains satisfecho', 'string', 'not_contains', 'oracle', 'software', '{"software": "Postgres 16"}', false],
@@ -117,11 +123,14 @@ class ArchitectureBusinessRulesTest extends TestCase
                 ['product_id' => $this->productWithTariff($region, 'Servidor de relleno', 'computacion', 400)->id, 'quantity' => 2, 'config' => '{}'],
                 ['product_id' => $this->productWithTariff($region, 'Firewall de relleno', 'redes', 300)->id, 'quantity' => 1, 'config' => '{}'],
             ];
+            $architecturesBefore = Architecture::query()->count();
+            $itemsBefore = ArchitectureItem::query()->count();
 
             if ($mustBlock) {
                 $errors = $this->postReview($project, $items, $user, context: $case);
                 $this->assertMessagesMention($errors, [$field], mode: 'all', context: $case);
-                $this->assertNothingPersisted();
+                $this->assertSame($architecturesBefore, Architecture::query()->count());
+                $this->assertSame($itemsBefore, ArchitectureItem::query()->count());
 
                 continue;
             }
@@ -130,7 +139,7 @@ class ArchitectureBusinessRulesTest extends TestCase
             $this->get(route('projects.architectures.check', $project))->assertOk();
             $this->post(route('projects.architectures.store', $project));
 
-            $architecture = Architecture::query()->firstOrFail();
+            $architecture = Architecture::query()->latest('id')->firstOrFail();
             $storedConfig = $architecture->items()->firstOrFail()->config;
             $this->assertArrayHasKey(
                 $field,
@@ -173,21 +182,23 @@ class ArchitectureBusinessRulesTest extends TestCase
     public function test_boolean_comparison_uses_existing_normalization_conventions(): void
     {
         $cases = [
-            // [configuración (JSON crudo), ¿satisface boolean eq '1'?]
-            ['{"europeo": true}', true],
-            ['{"europeo": "verdadero"}', true],
-            ['{"europeo": 1}', true],
-            ['{"europeo": false}', false],
-            ['{"europeo": "no"}', false],
-            ['{"europeo": "falso"}', false],
+            // [configuración (JSON crudo), operador, requerido, ¿satisface?]
+            ['{"europeo": true}', 'eq', '1', true],
+            ['{"europeo": "verdadero"}', 'eq', '1', true],
+            ['{"europeo": 1}', 'eq', '1', true],
+            ['{"europeo": false}', 'eq', '1', false],
+            ['{"europeo": "no"}', 'eq', '1', false],
+            ['{"europeo": "falso"}', 'eq', '1', false],
+            ['{"europeo": false}', 'neq', '1', true],
+            ['{"europeo": "verdadero"}', 'neq', '1', false],
         ];
 
-        foreach ($cases as $index => [$config, $satisfies]) {
+        foreach ($cases as $index => [$config, $operator, $requiredValue, $satisfies]) {
             $user = User::factory()->create();
             $region = $this->regionFor('bool-'.$index);
             $project = $this->projectFor($user, $region);
 
-            $this->requirementFor($project, 'europeo', 'eq', '1', 'boolean', mandatory: true);
+            $this->requirementFor($project, 'europeo', $operator, $requiredValue, 'boolean', mandatory: true);
 
             $items = [
                 ['product_id' => $this->productWithTariff($region, 'Disco bool', 'almacenamiento', 500)->id, 'quantity' => 1, 'config' => $config],
