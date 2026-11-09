@@ -2,17 +2,31 @@
 
 namespace Tests\Concerns;
 
+use App\Enums\PricingModel;
+use App\Enums\ProductType;
 use App\Models\Product;
+use App\Models\ProductAvailability;
+use App\Models\Provider;
 use App\Models\Region;
 use App\Models\User;
 
 /**
- * Datos de catálogo reutilizables para las pruebas: una región base,
- * productos activos/inactivos y disponibilidad por región tal como
- * declara el contrato de integración (products + product_region).
+ * Datos de catálogo reutilizables para las pruebas según el modelo oficial UT2:
+ * providers, regions, products y product_availabilities.
  */
 trait CreatesCatalogData
 {
+    protected ?Provider $defaultProvider = null;
+
+    protected function getProvider(): Provider
+    {
+        if ($this->defaultProvider === null) {
+            $this->defaultProvider = Provider::query()->firstOrCreate(['name' => 'NimbusCloud Test']);
+        }
+
+        return $this->defaultProvider;
+    }
+
     /**
      * Región con código siempre distinto: los mismos datos de catálogo
      * se comparten entre pruebas y algunas crean varias regiones.
@@ -22,38 +36,52 @@ trait CreatesCatalogData
         return Region::query()->create([
             'code' => $this->uniqueCode($code),
             'name' => 'Región de pruebas '.$code,
+            'country' => 'ES',
+            'is_eu' => true,
         ]);
     }
 
     /**
      * Crea un producto y su disponibilidad en las regiones indicadas.
      *
-     * @param  list<string>  $regionIds
+     * @param  list<int>  $regionIds
      */
-    protected function createProduct(string $code, string $type, array $regionIds, bool $active = true): Product
+    protected function createProduct(string $name, string|ProductType $type, array $regionIds, bool $active = true): Product
     {
+        $typeVal = $type instanceof ProductType ? $type->value : $type;
+
         $product = Product::query()->create([
-            'code' => $code,
-            'name' => 'Producto '.$code,
-            'type' => $type,
-            'unit_price' => 10.00,
+            'provider_id' => $this->getProvider()->id,
+            'name' => 'Producto '.$name,
+            'description' => 'Descripción de pruebas para '.$name,
+            'type' => $typeVal,
+            'billing_unit' => 'mes',
+            'config' => ['vcpu' => 2, 'ram_gb' => 4],
             'active' => $active,
         ]);
 
-        $product->regions()->sync($regionIds);
+        foreach ($regionIds as $regionId) {
+            ProductAvailability::query()->create([
+                'product_id' => $product->id,
+                'region_id' => $regionId,
+                'available' => true,
+                'price_cents' => 3000,
+                'pricing_model' => PricingModel::FijoMensual,
+            ]);
+        }
 
         return $product;
     }
 
     /**
-     * Tres elementos válidos: computación + almacenamiento + red
-     * disponibles en la región dada (cumuple: 3 elementos, 2+ tipos).
+     * Tres elementos válidos: computación + almacenamiento + redes
+     * disponibles en la región dada (cumple: al menos 3 elementos, 2+ tipos).
      */
     protected function validItemsFor(Region $region): array
     {
-        $compute = $this->createProduct($this->uniqueCode('comp'), 'computacion', [$region->id]);
-        $storage = $this->createProduct($this->uniqueCode('store'), 'almacenamiento', [$region->id]);
-        $network = $this->createProduct($this->uniqueCode('net'), 'red', [$region->id]);
+        $compute = $this->createProduct($this->uniqueCode('comp'), ProductType::Computacion, [$region->id]);
+        $storage = $this->createProduct($this->uniqueCode('store'), ProductType::Almacenamiento, [$region->id]);
+        $network = $this->createProduct($this->uniqueCode('net'), ProductType::Redes, [$region->id]);
 
         return [
             ['product_id' => $compute->id, 'quantity' => 2, 'config' => '{"instancia": "t3.medium"}'],

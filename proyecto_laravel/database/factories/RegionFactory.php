@@ -10,13 +10,15 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class RegionFactory extends Factory
 {
+    protected $model = Region::class;
+
     public function definition(): array
     {
-        $suffix = $this->unique()->numberBetween(100000, 999999);
-
         return [
-            'code' => 'reg-'.$suffix,
-            'name' => 'Región de pruebas '.$suffix,
+            'code' => fake()->unique()->lexify('??-????-?'),
+            'name' => fake()->city().' Region',
+            'country' => 'ES',
+            'is_eu' => true,
         ];
     }
 }

@@ -7,28 +7,25 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Tabla de productos del catálogo (contrato de integración EP03/RF12).
-     *
-     * Tipos contemplados por RF12: computación, almacenamiento, bases de
-     * datos, redes, seguridad, copias de seguridad, monitorización,
-     * computación IA, servicio IA y soporte.
-     *
-     * El módulo EP04 (proyectos y arquitecturas) solo requiere comprobar
-     * existencia, tipo, estado activo y disponibilidad por región. El CRUD
-     * del catálogo y sus atributos específicos corresponden a EP03.
+     * Tabla products: servicios/productos del catálogo (sección 5.1 UT2).
+     * Atributos: provider_id (FK restrict), name(100), description(text NULL),
+     * type(string/enum), billing_unit(string), config(json NOT NULL), active(boolean default true).
+     * Índice: (type, active).
      */
     public function up(): void
     {
         Schema::create('products', function (Blueprint $table) {
             $table->id();
-            $table->string('code', 50)->unique();
-            $table->string('name', 150);
-            $table->string('type', 50);
-            $table->decimal('unit_price', 12, 2)->default(0);
+            $table->foreignId('provider_id')->constrained('providers')->restrictOnDelete();
+            $table->string('name', 100);
+            $table->text('description')->nullable();
+            $table->string('type');
+            $table->string('billing_unit');
+            $table->json('config');
             $table->boolean('active')->default(true);
             $table->timestamps();
 
-            $table->index('type');
+            $table->index(['type', 'active']);
         });
     }
 
