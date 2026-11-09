@@ -6,6 +6,7 @@ use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
 use App\Models\Project;
 use App\Models\Region;
+use App\Services\ProjectService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -22,6 +23,8 @@ use Illuminate\View\View;
  */
 class ProjectController extends Controller
 {
+    public function __construct(private ProjectService $projectService) {}
+
     public function index(Request $request): View
     {
         $projects = Project::query()
@@ -44,11 +47,7 @@ class ProjectController extends Controller
 
     public function store(StoreProjectRequest $request): RedirectResponse
     {
-        $project = new Project($request->validated());
-        // RF17: el propietario del proyecto es el usuario autenticado;
-        // el identificador nunca se toma del formulario.
-        $project->user_id = $request->user()->id;
-        $project->save();
+        $project = $this->projectService->create($request->user(), $request->validated());
 
         return redirect()
             ->route('projects.show', $project)
@@ -82,7 +81,7 @@ class ProjectController extends Controller
 
     public function update(UpdateProjectRequest $request, Project $project): RedirectResponse
     {
-        $project->update($request->validated());
+        $this->projectService->update($project, $request->validated());
 
         return redirect()
             ->route('projects.show', $project)
@@ -99,7 +98,7 @@ class ProjectController extends Controller
         $this->authorize('delete', $project);
 
         $name = $project->name;
-        $project->delete();
+        $this->projectService->delete($project);
 
         return redirect()
             ->route('projects.index')
@@ -140,7 +139,7 @@ class ProjectController extends Controller
     {
         $this->authorize('restore', $project);
 
-        $project->restore();
+        $this->projectService->restore($project);
 
         return redirect()
             ->route('projects.show', $project)
