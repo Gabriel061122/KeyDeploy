@@ -3,28 +3,23 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
+    use WithoutModelEvents;
+
     /**
-     * Seed de la aplicación: catálogo de demostración (contrato de
-     * integración con EP03) y, en entornos de desarrollo, una cuenta de
-     * CLIENTE de ejemplo para probar la interfaz.
+     * Seed the application's database.
      */
     public function run(): void
     {
-        $this->call(CatalogDemoSeeder::class);
+        // User::factory(10)->create();
 
-        if (app()->environment('local', 'testing', 'development')) {
-            User::firstOrCreate(
-                ['email' => 'demo@keydeploy.test'],
-                [
-                    'name' => 'Cliente de demostración',
-                    'password' => 'clave1234',
-                    'role' => User::ROLE_CLIENTE,
-                ],
-            );
-        }
+        User::factory()->create([
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+        ]);
     }
 }
