@@ -121,6 +121,15 @@
                         <span>Mis proyectos</span>
                     </a>
 
+                    <!-- Enlace: Carrito -->
+                    <a href="{{ route('cart.index') }}"
+                       class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all duration-150 {{ request()->routeIs('cart.*') ? 'bg-emerald-50 text-emerald-700 shadow-xs border border-emerald-100 font-bold' : 'text-slate-600 hover:text-emerald-600 hover:bg-emerald-50/50' }}">
+                        <svg class="w-4 h-4 {{ request()->routeIs('cart.*') ? 'text-emerald-600' : 'text-slate-400' }}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                        </svg>
+                        <span>Carrito</span>
+                    </a>
+
                     <!-- Enlace: Papelera -->
                     <a href="<?php echo e(route('projects.trash')); ?>"
                        class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all duration-150 <?php echo e(request()->routeIs('projects.trash') ? 'bg-amber-50 text-amber-800 shadow-xs border border-amber-200 font-bold' : 'text-slate-600 hover:text-amber-600 hover:bg-amber-50/50'); ?>">

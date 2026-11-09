@@ -15,11 +15,29 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // Seeder oficial del catálogo con los mínimos de la memoria UT2 (2 proveedores, 5 regiones, 15 productos, 6 tipos)
+        $this->call(CatalogSeeder::class);
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        if (app()->environment('local', 'testing', 'development')) {
+            // Usuario de demostración
+            User::firstOrCreate(
+                ['email' => 'demo@keydeploy.test'],
+                [
+                    'name' => 'Cliente de demostración',
+                    'password' => 'clave1234',
+                    'role' => User::ROLE_CLIENTE,
+                ],
+            );
+
+            // Usuario de desarrollo
+            User::firstOrCreate(
+                ['email' => 'dev@keydeploy.test'],
+                [
+                    'name' => 'Usuario de desarrollo',
+                    'password' => 'password',
+                    'role' => User::ROLE_CLIENTE,
+                ],
+            );
+        }
     }
 }
