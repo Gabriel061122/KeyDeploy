@@ -126,6 +126,19 @@ final class RequirementRules
             .'Operadores válidos: '.implode(', ', self::operatorsFor($dataType)).'.';
     }
 
+    /**
+     * Mensaje de validación para un valor que no respeta su tipo.
+     */
+    public static function valueError(string $dataType): string
+    {
+        return match ($dataType) {
+            'integer' => 'El valor debe ser un número entero.',
+            'decimal' => 'El valor debe ser un número decimal.',
+            'boolean' => 'El valor debe ser verdadero o falso.',
+            default => 'El valor no es válido para el tipo seleccionado.',
+        };
+    }
+
     private static function normalizeBoolean(string $value): ?string
     {
         return match (strtolower($value)) {

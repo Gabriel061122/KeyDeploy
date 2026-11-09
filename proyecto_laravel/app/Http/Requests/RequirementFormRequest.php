@@ -74,7 +74,7 @@ abstract class RequirementFormRequest extends FormRequest
 
             $check = RequirementRules::checkValue($dataType, $value);
             if ($value !== '' && ! $check['valid']) {
-                $validator->errors()->add('value', self::valueError($dataType));
+                $validator->errors()->add('value', RequirementRules::valueError($dataType));
             }
         });
     }
@@ -93,15 +93,5 @@ abstract class RequirementFormRequest extends FormRequest
             'value.required' => 'El valor del requerimiento es obligatorio.',
             'value.max' => 'El valor no puede exceder :max caracteres.',
         ];
-    }
-
-    private static function valueError(string $dataType): string
-    {
-        return match ($dataType) {
-            'integer' => 'El valor debe ser un número entero.',
-            'decimal' => 'El valor debe ser un número decimal.',
-            'boolean' => 'El valor debe ser verdadero o falso.',
-            default => 'El valor no es válido para el tipo seleccionado.',
-        };
     }
 }
