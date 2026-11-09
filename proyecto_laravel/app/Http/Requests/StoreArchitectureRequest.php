@@ -2,11 +2,10 @@
 
 namespace App\Http\Requests;
 
-use App\Exceptions\PricingException;
 use App\Models\Architecture;
 use App\Models\Project;
 use App\Models\Region;
-use App\Services\ArchitecturePricingService;
+use App\Services\ArchitectureBusinessRules;
 use App\Services\ArchitectureValidator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
@@ -17,16 +16,16 @@ use Illuminate\Validation\Validator;
  * Creación manual de una arquitectura. Cubre las reglas de campo
  * (región válida, identificadores de producto existentes, cantidades
  * enteras positivas) y las reglas de dominio de varias tablas delega en
- * `ArchitectureValidator`: mínimo de elementos y de tipos, estado activo
- * y disponbilidad real del producto en la región (RN05).
+ * `ArchitectureBusinessRules`: mínimo de elementos y de tipos, región del
+ * proyecto, estado activo y disponibilidad real del producto en la región
+ * (RN05) y requisitos obligatorios del proyecto.
  */
 class StoreArchitectureRequest extends FormRequest
 {
     public const ITEM_SLOTS = 6;
 
     public function __construct(
-        public ArchitectureValidator $architectureValidator,
-        public ArchitecturePricingService $pricingService,
+        public ArchitectureBusinessRules $businessRules,
     ) {
         parent::__construct();
     }
@@ -44,9 +43,16 @@ class StoreArchitectureRequest extends FormRequest
      */
     public function rules(): array
     {
+        $project = $this->route('project');
+        $regionRules = ['required', 'integer', Rule::exists('regions', 'id')];
+
+        if ($project instanceof Project) {
+            $regionRules[] = Rule::in([(int) $project->region_id]);
+        }
+
         return [
             'name' => ['required', 'string', 'max:150'],
-            'region_id' => ['required', 'integer', Rule::exists('regions', 'id')],
+            'region_id' => $regionRules,
             'items' => ['required', 'array', 'min:'.ArchitectureValidator::MIN_ITEMS, 'max:'.self::ITEM_SLOTS],
             'items.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:99999'],
@@ -62,31 +68,32 @@ class StoreArchitectureRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            $project = $this->route('project');
+            $region = Region::find($this->integer('region_id'));
+
+            $regionMismatch = $project instanceof Project
+                && $region !== null
+                && (int) $project->region_id !== (int) $region->id;
+
             if ($validator->errors()->any()) {
-                return;
+                $onlyRegionMismatch = $regionMismatch
+                    && array_diff($validator->errors()->keys(), ['region_id']) === [];
+
+                if (! $onlyRegionMismatch) {
+                    return;
+                }
             }
 
-            $region = Region::find($this->integer('region_id'));
             $items = $this->input('items', []);
 
-            if ($region === null || ! is_array($items)) {
+            if (! $project instanceof Project || $region === null || ! is_array($items)) {
                 return;
             }
 
-            $result = $this->architectureValidator->validate($region, $items);
+            $result = $this->businessRules->evaluate($project, $region, $items);
 
             foreach ($result['errors'] as $error) {
                 $validator->errors()->add('items', $error);
-            }
-
-            if ($result['errors'] !== []) {
-                return;
-            }
-
-            try {
-                $this->pricingService->calculate($region, $result['items']);
-            } catch (PricingException $exception) {
-                $validator->errors()->add('items', $exception->getMessage());
             }
         });
     }
@@ -100,6 +107,7 @@ class StoreArchitectureRequest extends FormRequest
             'name.required' => 'El nombre de la arquitectura es obligatorio.',
             'region_id.required' => 'La región es obligatoria.',
             'region_id.exists' => 'La región seleccionada no existe o no es válida.',
+            'region_id.in' => 'La región de la arquitectura debe coincidir con la región del proyecto.',
             'items.required' => 'Debes añadir los elementos de la arquitectura.',
             'items.min' => 'La arquitectura debe contener al menos :min elementos.',
             'items.max' => 'El formulario admite como máximo :max elementos.',

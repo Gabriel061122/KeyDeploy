@@ -75,4 +75,16 @@
         <p class="muted">No se puede mostrar un desglose completo porque falta una tarifa válida o un consumo obligatorio.</p>
     </div>
 @endif
+
+@if (! empty($warnings))
+    <div class="card" style="background:#fffbeb">
+        <h2>Avisos no bloqueantes</h2>
+        <ul>
+            @foreach ($warnings as $warning)
+                <li>{{ $warning }}</li>
+            @endforeach
+        </ul>
+        <p class="muted">El aviso no altera la arquitectura guardada ni impide continuar con el presupuesto.</p>
+    </div>
+@endif
 @endsection

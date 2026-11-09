@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Enums\ProductType;
 use App\Models\Product;
+use App\Models\Project;
 use App\Models\Region;
+use App\Models\Requirement;
 use Illuminate\Support\Collection;
 
 /**
@@ -12,9 +14,10 @@ use Illuminate\Support\Collection;
  *
  * Concentra TODAS las reglas que dependen de varias tablas o relacional
  * entre elementos: mínimo de elementos, variedad de tipos, productos
- * existentes, activos y disponibles en la región (RN05) y coherencia de
- * cantidades y configuraciones JSON. Los form requests y los
- * controladores delegan en este servicio en lugar de duplicar las reglas.
+ * existentes, activos y disponibles en la región (RN05), coherencia de
+ * cantidades y configuraciones JSON, región del proyecto y requisitos
+ * obligatorios del proyecto. Los form requests y los controladores
+ * delegan en este servicio en lugar de duplicar las reglas.
  */
 final class ArchitectureValidator
 {
@@ -25,7 +28,9 @@ final class ArchitectureValidator
     public const MIN_DISTINCT_TYPES = 2;
 
     /**
-     * Valida los elementos crudos del formulario contra una región.
+     * Valida los elementos crudos del formulario contra una región y,
+     * cuando se conoce el proyecto, contra su región y sus requisitos
+     * obligatorios.
      *
      * Devuelve los elementos individualmente coherentes (identificador de
      * producto existente, cantidad entera >= 1 y configuración JSON
@@ -36,11 +41,19 @@ final class ArchitectureValidator
      * @param  array<int, array<string, mixed>>  $items  Filas tal y como llegan del formulario.
      * @return array{items: list<array{product_id: int, quantity: int, config: array<string, mixed>}>, errors: list<string>, valid: bool}
      */
-    public function validate(Region $region, array $items): array
+    public function validate(Region $region, array $items, ?Project $project = null): array
     {
         $errors = [];
         $sanitized = [];
         $productIds = [];
+
+        if ($project !== null && (int) $project->region_id !== (int) $region->id) {
+            $errors[] = sprintf(
+                'La región seleccionada "%s" no coincide con la región del proyecto "%s"; la arquitectura debe usar la región del proyecto.',
+                $region->name,
+                $project->region?->name ?? '—',
+            );
+        }
 
         foreach ($items as $index => $item) {
             $processable = $this->processRow($index, $item, $errors, $productIds);
@@ -77,11 +90,155 @@ final class ArchitectureValidator
             );
         }
 
+        if ($project !== null) {
+            $this->checkRequirements($project, $sanitized, $errors);
+        }
+
         return [
             'items' => $sanitized,
             'errors' => $errors,
             'valid' => $errors === [],
         ];
+    }
+
+    /**
+     * Comprueba los requisitos obligatorios del proyecto contra las
+     * claves de primer nivel de la configuración de los elementos.
+     *
+     * Basta con que un valor de cualquier elemento que declare la clave
+     * exacta satisfaga el operador; los requisitos opcionales no bloquean.
+     *
+     * @param  list<array{product_id: int, quantity: int, config: array<string, mixed>}>  $items
+     * @param  list<string>  $errors
+     */
+    private function checkRequirements(Project $project, array $items, array &$errors): void
+    {
+        $requirements = $project->requirements()->orderBy('id')->get();
+        if ($requirements->isEmpty()) {
+            return;
+        }
+
+        $configs = array_map(
+            static fn (array $item): array => $item['config'],
+            $items,
+        );
+
+        foreach ($requirements as $requirement) {
+            if (! $requirement->mandatory) {
+                continue;
+            }
+
+            $key = (string) $requirement->field_key;
+            $values = [];
+
+            foreach ($configs as $config) {
+                if (array_key_exists($key, $config)) {
+                    $values[] = $config[$key];
+                }
+            }
+
+            $condition = sprintf(
+                '"%s" %s "%s"',
+                $key,
+                RequirementRules::OPERATOR_LABELS[$requirement->operator] ?? $requirement->operator,
+                $requirement->value,
+            );
+
+            if ($values === []) {
+                $errors[] = sprintf(
+                    'No se satisface el requisito obligatorio %s: ningún elemento define la clave de configuración "%s".',
+                    $condition,
+                    $key,
+                );
+
+                continue;
+            }
+
+            foreach ($values as $value) {
+                if ($this->satisfiesRequirement($requirement, $value)) {
+                    continue 2;
+                }
+            }
+
+            $errors[] = sprintf(
+                'No se satisface el requisito obligatorio %s con la configuración de la arquitectura.',
+                $condition,
+            );
+        }
+    }
+
+    private function satisfiesRequirement(Requirement $requirement, mixed $value): bool
+    {
+        $dataType = (string) $requirement->data_type;
+        $operator = (string) $requirement->operator;
+
+        if (! RequirementRules::isCompatible($dataType, $operator)) {
+            return false;
+        }
+
+        $expected = RequirementRules::checkValue($dataType, (string) $requirement->value);
+        if (! ($expected['valid'] ?? false)) {
+            return false;
+        }
+
+        $actual = $this->normalizeConfigValue($dataType, $value);
+        if ($actual === null) {
+            return false;
+        }
+
+        return match ($dataType) {
+            'string' => $this->compareStrings($operator, $actual, (string) $expected['normalized']),
+            'integer', 'decimal' => $this->compareNumbers(
+                $operator,
+                (float) $actual,
+                (float) $expected['normalized'],
+            ),
+            'boolean' => $operator === 'eq'
+                ? $actual === $expected['normalized']
+                : $actual !== $expected['normalized'],
+            default => false,
+        };
+    }
+
+    /**
+     * Normaliza un valor de configuración con las mismas convenciones que
+     * los requisitos del proyecto (coma decimal, booleanos equivalentes y
+     * cadenas recortadas). Devuelve null si no es válido para el tipo.
+     */
+    private function normalizeConfigValue(string $dataType, mixed $value): ?string
+    {
+        if ($value === null || is_array($value) || is_object($value)) {
+            return null;
+        }
+
+        $string = is_bool($value) ? ($value ? '1' : '0') : (string) $value;
+        $check = RequirementRules::checkValue($dataType, $string);
+
+        return ($check['valid'] ?? false) ? $check['normalized'] : null;
+    }
+
+    private function compareStrings(string $operator, string $actual, string $expected): bool
+    {
+        return match ($operator) {
+            'eq' => $actual === $expected,
+            'neq' => $actual !== $expected,
+            'contains' => str_contains($actual, $expected),
+            'not_contains' => ! str_contains($actual, $expected),
+            default => false,
+        };
+    }
+
+    private function compareNumbers(string $operator, float $actual, float $expected): bool
+    {
+        return match ($operator) {
+            'eq' => $actual == $expected,
+            'neq' => $actual != $expected,
+            'gt' => $actual > $expected,
+            'gte' => $actual >= $expected,
+            'lt' => $actual < $expected,
+            'lte' => $actual <= $expected,
+            default => false,
+        };
     }
 
     /**

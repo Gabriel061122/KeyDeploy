@@ -55,8 +55,8 @@
             @endforeach
         </tbody>
     </table>
-    <p class="muted">Comprobaciones aplicadas: elementos y tipos mínimos, productos existentes y activos,
-    disponibilidad en la región (RN05), consumos mensuales válidos y tarifas leídas del catálogo. El guardado final revalida todo de nuevo dentro de una transacción atómica.</p>
+    <p class="muted">Comprobaciones aplicadas: elementos y tipos mínimos, región del proyecto, productos existentes y activos,
+    disponibilidad en la región (RN05), requisitos obligatorios del proyecto, consumos mensuales válidos y tarifas leídas del catálogo. El guardado final revalida todo de nuevo dentro de una transacción atómica.</p>
 </div>
 
 @if ($pricing)
@@ -76,6 +76,18 @@
     <div class="card">
         <p class="field-error">{{ $pricingError }}</p>
         <p class="muted">Corrige la arquitectura antes de guardarla: no se persistirá ningún cálculo incompleto.</p>
+    </div>
+@endif
+
+@if (! empty($warnings))
+    <div class="card" style="background:#fffbeb">
+        <h3>Avisos no bloqueantes</h3>
+        <ul>
+            @foreach ($warnings as $warning)
+                <li>{{ $warning }}</li>
+            @endforeach
+        </ul>
+        <p class="muted">Puedes continuar y guardar la arquitectura; el aviso no impide el guardado.</p>
     </div>
 @endif
 

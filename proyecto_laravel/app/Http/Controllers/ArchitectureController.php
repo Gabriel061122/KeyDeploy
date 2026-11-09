@@ -9,8 +9,8 @@ use App\Models\ArchitectureItem;
 use App\Models\Product;
 use App\Models\Project;
 use App\Models\Region;
+use App\Services\ArchitectureBusinessRules;
 use App\Services\ArchitecturePricingService;
-use App\Services\ArchitectureValidator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -30,7 +30,7 @@ class ArchitectureController extends Controller
     public const DRAFT_KEY = 'architecture_draft';
 
     public function __construct(
-        public ArchitectureValidator $architectureValidator,
+        public ArchitectureBusinessRules $businessRules,
         public ArchitecturePricingService $pricingService,
     ) {}
 
@@ -113,13 +113,20 @@ class ArchitectureController extends Controller
         $this->authorize('create', [Architecture::class, $project]);
 
         $region = Region::query()->findOrFail((int) $request->input('region_id'));
-        $validation = $this->architectureValidator->validate($region, $request->input('items', []));
+        $evaluation = $this->businessRules->evaluate($project, $region, $request->input('items', []));
+
+        if (! $evaluation['valid']) {
+            return redirect()
+                ->route('projects.architectures.create', $project)
+                ->withErrors($evaluation['errors'])
+                ->withInput();
+        }
 
         $draft = [
             'project_id' => $project->id,
             'region_id' => $region->id,
             'name' => (string) $request->input('name'),
-            'items' => $validation['items'],
+            'items' => $evaluation['items'],
         ];
 
         $request->session()->put(self::DRAFT_KEY, $draft);
@@ -158,14 +165,11 @@ class ArchitectureController extends Controller
             ->get()
             ->keyBy('id');
 
-        $pricing = null;
-        $pricingError = null;
-
-        try {
-            $pricing = $this->pricingService->calculate($region, $draft['items']);
-        } catch (PricingException $exception) {
-            $pricingError = $exception->getMessage();
-        }
+        $evaluation = $this->businessRules->evaluate($project, $region, $draft['items']);
+        $pricing = $evaluation['pricing'];
+        $pricingError = $pricing === null
+            ? implode(' ', array_unique($evaluation['errors']))
+            : null;
 
         return view('architectures.preview', [
             'project' => $project,
@@ -174,6 +178,7 @@ class ArchitectureController extends Controller
             'products' => $products,
             'pricing' => $pricing,
             'pricingError' => $pricingError,
+            'warnings' => $evaluation['warnings'],
         ]);
     }
 
@@ -195,24 +200,16 @@ class ArchitectureController extends Controller
         }
 
         $region = Region::query()->findOrFail($draft['region_id']);
-        $result = $this->architectureValidator->validate($region, $draft['items']);
+        $evaluation = $this->businessRules->evaluate($project, $region, $draft['items']);
 
-        if (! $result['valid']) {
+        if (! $evaluation['valid']) {
             return redirect()
                 ->route('projects.architectures.create', $project)
-                ->withErrors($result['errors']);
-        }
-
-        try {
-            $this->pricingService->calculate($region, $result['items']);
-        } catch (PricingException $exception) {
-            return redirect()
-                ->route('projects.architectures.create', $project)
-                ->withErrors(['items' => $exception->getMessage()]);
+                ->withErrors($evaluation['errors']);
         }
 
         /** @var Architecture $architecture */
-        $architecture = DB::transaction(function () use ($project, $draft, $result): Architecture {
+        $architecture = DB::transaction(function () use ($project, $draft, $evaluation): Architecture {
             $architecture = Architecture::query()->create([
                 'project_id' => $project->id,
                 'region_id' => $draft['region_id'],
@@ -220,7 +217,7 @@ class ArchitectureController extends Controller
                 'source' => Architecture::SOURCE_MANUAL,
             ]);
 
-            foreach ($result['items'] as $item) {
+            foreach ($evaluation['items'] as $item) {
                 ArchitectureItem::query()->create([
                     'architecture_id' => $architecture->id,
                     'product_id' => $item['product_id'],
@@ -269,9 +266,11 @@ class ArchitectureController extends Controller
 
         $pricing = null;
         $pricingError = null;
+        $warnings = [];
 
         try {
             $pricing = $this->pricingService->calculateForArchitecture($architecture);
+            $warnings = $this->businessRules->budgetWarnings($architecture->project, $pricing);
         } catch (PricingException $exception) {
             $pricingError = $exception->getMessage();
         }
@@ -280,6 +279,7 @@ class ArchitectureController extends Controller
             'architecture' => $architecture,
             'pricing' => $pricing,
             'pricingError' => $pricingError,
+            'warnings' => $warnings,
         ]);
     }
 
