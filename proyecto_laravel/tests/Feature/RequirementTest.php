@@ -141,6 +141,7 @@ class RequirementTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->projectFor($user);
+        $otherProject = $this->projectFor($user);
         $requirement = Requirement::factory()->create([
             'project_id' => $project->id,
             'field_key' => 'memoria_gb',
@@ -156,12 +157,15 @@ class RequirementTest extends TestCase
                 'operator' => 'gte',
                 'value' => '32',
                 'data_type' => 'integer',
+                'project_id' => $otherProject->id,
+                'source' => 'ia',
                 // checkbox ausente => condicion opcional
             ])
             ->assertRedirect(route('projects.requirements.show', [$project, $requirement]));
 
         $this->assertDatabaseHas('requirements', [
             'id' => $requirement->id,
+            'project_id' => $project->id,
             'value' => '32',
             'mandatory' => 0,
             'source' => 'manual', // la edición no cambia la procedencia
