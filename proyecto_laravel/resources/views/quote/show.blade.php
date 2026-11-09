@@ -3,6 +3,14 @@
 @section('title', 'Presupuesto #' . $quote->id)
 
 @section('content')
+@if (session('warning'))
+    <div class="card" style="background:#fffbeb;border-color:#fcd34d">
+        <h2>Aviso de presupuesto</h2>
+        <p>{{ session('warning') }}</p>
+        <p class="muted">El aviso no bloquea la emisión ni altera los importes del presupuesto.</p>
+    </div>
+@endif
+
 <div class="toolbar">
     <h1>Presupuesto #{{ $quote->id }}</h1>
     <div class="flex gap-2">
@@ -44,13 +52,19 @@
                     <td><strong>{{ $line->product_name }}</strong></td>
                     <td><span class="badge">{{ $line->product_type }}</span></td>
                     <td>
-                        @if ($line->pricing_model === 'mensual')
-                            <span class="badge" style="background:#fef3c7;border-color:#fcd34d;color:#92400e">Mensual</span>
-                        @elseif ($line->pricing_model === 'unico')
-                            <span class="badge" style="background:#dbeafe;border-color:#93c5fd;color:#1e40af">Pago único</span>
-                        @else
-                            <span class="badge" style="background:#fce7f3;border-color:#f9a8d4;color:#9d174d">Por uso</span>
-                        @endif
+                        @php
+                            $pricingModelLabels = [
+                                'mensual' => ['Mensual', 'background:#fef3c7;border-color:#fcd34d;color:#92400e'],
+                                'fijo_mensual' => ['Fijo mensual', 'background:#fef3c7;border-color:#fcd34d;color:#92400e'],
+                                'por_hora' => ['Por hora', 'background:#fce7f3;border-color:#f9a8d4;color:#9d174d'],
+                                'por_gb' => ['Por GB', 'background:#ede9fe;border-color:#c4b5fd;color:#5b21b6'],
+                                'unico' => ['Pago único', 'background:#dbeafe;border-color:#93c5fd;color:#1e40af'],
+                                'por_uso' => ['Por uso', 'background:#fce7f3;border-color:#f9a8d4;color:#9d174d'],
+                            ];
+                            [$pricingModelLabel, $pricingModelStyle] = $pricingModelLabels[$line->pricing_model]
+                                ?? [$line->pricing_model, 'background:#f1f5f9;border-color:#cbd5e1;color:#334155'];
+                        @endphp
+                        <span class="badge" style="{{ $pricingModelStyle }}">{{ $pricingModelLabel }}</span>
                     </td>
                     <td>{{ $line->quantity }}</td>
                     <td>{{ number_format($line->unit_price_cents / 100, 2) }} €</td>

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Architecture;
 use App\Models\Project;
 use App\Models\Quote;
+use App\Services\ArchitectureQuoteService;
 use App\Services\QuoteService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
@@ -29,6 +31,37 @@ class QuoteController extends Controller
 
         return redirect()->route('quotes.show', $quote)
             ->with('success', 'Presupuesto emitido correctamente.');
+    }
+
+    /**
+     * Emitir un presupuesto desde una arquitectura manual guardada.
+     *
+     * Es una entrada independiente del carrito: recalcula y revalida con
+     * los datos persistidos de la arquitectura, el proyecto y el catálogo.
+     */
+    public function emitFromArchitecture(
+        Architecture $architecture,
+        ArchitectureQuoteService $architectureQuoteService,
+    ): RedirectResponse {
+        $this->authorize('emitQuote', $architecture);
+
+        try {
+            $result = $architectureQuoteService->emitFromArchitecture(auth()->user(), $architecture);
+        } catch (\Exception $e) {
+            return redirect()
+                ->route('architectures.show', $architecture)
+                ->withErrors(['emit' => $e->getMessage()]);
+        }
+
+        $redirect = redirect()
+            ->route('quotes.show', $result['quote'])
+            ->with('success', 'Presupuesto emitido desde la arquitectura.');
+
+        if ($result['warnings'] !== []) {
+            $redirect->with('warning', implode(' ', $result['warnings']));
+        }
+
+        return $redirect;
     }
 
     /**

@@ -92,6 +92,11 @@ Route::middleware('auth')->group(function () {
         ->name('architectures.show')
         ->whereNumber('architecture');
 
+    // Emisión de presupuesto desde una arquitectura manual guardada.
+    Route::post('arquitecturas/{architecture}/presupuesto', [QuoteController::class, 'emitFromArchitecture'])
+        ->name('architectures.quotes.emit')
+        ->whereNumber('architecture');
+
     // Carrito persistente (EP05)
     Route::get('carrito', [CartItemController::class, 'index'])->name('cart.index');
     Route::post('carrito', [CartItemController::class, 'store'])->name('cart.store');
