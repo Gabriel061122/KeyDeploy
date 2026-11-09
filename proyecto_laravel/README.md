@@ -7,19 +7,6 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
-## Desarrollo local
-
-KeyDeploy usa MySQL 8.4. Crea las bases de datos `keydeploy` y
-`keydeploy_test` y configura el usuario `laravel_user` según
-[docs/entorno.md](../docs/entorno.md). Configura las credenciales locales en
-`.env` (no guardes contraseñas en archivos versionados). Para inicializar la
-base de desarrollo y ejecutar las pruebas con la base separada:
-
-```bash
-php artisan migrate:fresh --seed
-php artisan test
-```
-
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
