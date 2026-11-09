@@ -7,11 +7,10 @@ use App\Models\Architecture;
 use App\Models\Product;
 use App\Models\Project;
 use App\Models\Region;
-use App\Services\ArchitectureValidator;
+use App\Services\ArchitectureService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
@@ -19,17 +18,17 @@ use Illuminate\View\View;
  * depender de la IA (complemento manual de los flujos RF04/CU04).
  *
  * Flujo sin JavaScript: formulario → (POST) validación completa con
- * StoreArchitectureRequest y ArchitectureValidator → previsualización
+ * StoreArchitectureRequest y ArchitectureService → previsualización
  * (GET sobre un borrador en sesión) → confirmación → guardado atómico
- * con DB::transaction (arquitectura + todos sus elementos). Nunca se
- * persiste una arquitectura parcialmente válida.
+ * (arquitectura + todos sus elementos). Nunca se persiste una arquitectura
+ * parcialmente válida.
  */
 class ArchitectureController extends Controller
 {
     /** Clave del borrador pendiente de confirmar en la sesión. */
     public const DRAFT_KEY = 'architecture_draft';
 
-    public function __construct(public ArchitectureValidator $architectureValidator) {}
+    public function __construct(private ArchitectureService $architectureService) {}
 
     /**
      * Formulario de alta: región, productos disponibles (filtrados por
@@ -118,7 +117,7 @@ class ArchitectureController extends Controller
         $validated = $request->validated();
         $region = Region::query()->findOrFail($validated['region_id']);
 
-        $result = $this->architectureValidator->validate($region, $validated['items']);
+        $result = $this->architectureService->validate($region, $validated['items']);
 
         if (! $result['valid']) {
             // Defensa adicional: el Form Request ya debería haber
@@ -169,9 +168,8 @@ class ArchitectureController extends Controller
     }
 
     /**
-     * Guardado atómico: la arquitectura y todos sus elementos se
-     * escriben dentro de una única transacción; si algo falla, nada
-     * queda a medio guardar (principio de coherencia de RN08).
+     * El servicio guarda la arquitectura y todos sus elementos dentro de
+     * una única transacción; si algo falla, nada queda a medio guardar.
      */
     public function store(Request $request, Project $project): RedirectResponse
     {
@@ -186,28 +184,21 @@ class ArchitectureController extends Controller
         }
 
         $region = Region::query()->findOrFail($draft['region_id']);
-        $result = $this->architectureValidator->validate($region, $draft['items']);
+        $result = $this->architectureService->createManual(
+            $project,
+            $region,
+            $draft['name'],
+            $draft['items'],
+        );
 
-        if (! $result['valid']) {
+        if ($result['architecture'] === null) {
             return redirect()
                 ->route('projects.architectures.create', $project)
                 ->withInput()
                 ->withErrors(['items' => $result['errors']]);
         }
 
-        $architecture = DB::transaction(function () use ($project, $draft, $result): Architecture {
-            $architecture = new Architecture([
-                'region_id' => $draft['region_id'],
-                'name' => $draft['name'],
-            ]);
-            $architecture->project_id = $project->id;
-            $architecture->source = Architecture::SOURCE_MANUAL;
-            $architecture->save();
-
-            $architecture->items()->createMany($result['items']);
-
-            return $architecture;
-        });
+        $architecture = $result['architecture'];
 
         $request->session()->forget(self::DRAFT_KEY);
 
