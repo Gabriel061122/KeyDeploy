@@ -2,6 +2,8 @@
 
 namespace Tests\Concerns;
 
+use App\Enums\PricingModel;
+use App\Enums\ProductType;
 use App\Models\Product;
 use App\Models\Provider;
 use App\Models\Region;
@@ -14,6 +16,17 @@ use App\Models\User;
  */
 trait CreatesCatalogData
 {
+    protected ?Provider $defaultProvider = null;
+
+    protected function getProvider(): Provider
+    {
+        if ($this->defaultProvider === null) {
+            $this->defaultProvider = Provider::query()->firstOrCreate(['name' => 'NimbusCloud Test']);
+        }
+
+        return $this->defaultProvider;
+    }
+
     /**
      * Región con código siempre distinto: los mismos datos de catálogo
      * se comparten entre pruebas y algunas crean varias regiones.
@@ -23,6 +36,8 @@ trait CreatesCatalogData
         return Region::query()->create([
             'code' => $this->uniqueCode($code),
             'name' => 'Región de pruebas '.$code,
+            'country' => 'ES',
+            'is_eu' => true,
         ]);
     }
 
@@ -31,7 +46,7 @@ trait CreatesCatalogData
      *
      * @param  list<int>  $regionIds
      */
-    protected function createProduct(string $code, string $type, array $regionIds, bool $active = true): Product
+    protected function createProduct(string $name, string|ProductType $type, array $regionIds, bool $active = true): Product
     {
         $provider = Provider::first() ?? Provider::create(['name' => 'TestProvider']);
 
@@ -64,9 +79,9 @@ trait CreatesCatalogData
      */
     protected function validItemsFor(Region $region): array
     {
-        $compute = $this->createProduct($this->uniqueCode('comp'), 'computacion', [$region->id]);
-        $storage = $this->createProduct($this->uniqueCode('store'), 'almacenamiento', [$region->id]);
-        $network = $this->createProduct($this->uniqueCode('net'), 'red', [$region->id]);
+        $compute = $this->createProduct($this->uniqueCode('comp'), ProductType::Computacion, [$region->id]);
+        $storage = $this->createProduct($this->uniqueCode('store'), ProductType::Almacenamiento, [$region->id]);
+        $network = $this->createProduct($this->uniqueCode('net'), ProductType::Redes, [$region->id]);
 
         return [
             ['product_id' => $compute->id, 'quantity' => 2, 'config' => '{"instancia": "t3.medium"}'],

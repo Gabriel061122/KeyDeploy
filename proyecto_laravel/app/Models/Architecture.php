@@ -34,8 +34,10 @@ class Architecture extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'project_id',
         'region_id',
         'name',
+        'source',
     ];
 
     public function project(): BelongsTo

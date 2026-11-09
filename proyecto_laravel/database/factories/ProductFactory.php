@@ -2,7 +2,9 @@
 
 namespace Database\Factories;
 
+use App\Enums\ProductType;
 use App\Models\Product;
+use App\Models\Provider;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -10,23 +12,20 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class ProductFactory extends Factory
 {
+    protected $model = Product::class;
+
     public function definition(): array
     {
         $suffix = substr(bin2hex(random_bytes(5)), 0, 6);
 
         return [
-            'code' => 'prd-'.$suffix,
-            'name' => 'Producto '.$this->faker->word(),
-            'type' => $this->faker->randomElement(Product::TYPES),
-            'unit_price' => $this->faker->randomFloat(2, 5, 500),
+            'provider_id' => Provider::factory(),
+            'name' => 'Instancia '.fake()->words(2, true),
+            'description' => fake()->sentence(),
+            'type' => fake()->randomElement(ProductType::cases()),
+            'billing_unit' => 'mes',
+            'config' => ['vcpu' => 2, 'ram_gb' => 4],
             'active' => true,
         ];
-    }
-
-    public function inactive(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'active' => false,
-        ]);
     }
 }
