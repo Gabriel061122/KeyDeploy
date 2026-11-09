@@ -7,12 +7,12 @@
     <h1 style="margin: 0;">{{ $architecture->name }}</h1>
     <div class="actions" style="margin: 0;">
         <a class="btn btn-secondary" href="{{ route('projects.show', $architecture->project) }}">Volver al proyecto</a>
-        @if ($architecture->source === \App\Models\Architecture::SOURCE_MANUAL)
+        @can('emitQuote', $architecture)
             <form method="POST" action="{{ route('architectures.quotes.emit', $architecture) }}" style="margin: 0;">
                 @csrf
                 <button type="submit" class="btn">Emitir presupuesto desde esta arquitectura</button>
             </form>
-        @endif
+        @endcan
     </div>
 </div>
 

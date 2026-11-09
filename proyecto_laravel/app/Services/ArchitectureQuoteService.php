@@ -34,6 +34,10 @@ final class ArchitectureQuoteService
      */
     public function emitFromArchitecture(User $user, Architecture $architecture): array
     {
+        if ($this->roleOf($user) !== User::ROLE_CLIENTE) {
+            throw new \DomainException('Solo un CLIENTE puede emitir un presupuesto desde una arquitectura.');
+        }
+
         $project = $architecture->project()->withTrashed()->first();
 
         if ($project === null || $project->trashed()) {
@@ -130,5 +134,16 @@ final class ArchitectureQuoteService
             'quote' => $quote,
             'warnings' => $evaluation['warnings'],
         ];
+    }
+
+    private function roleOf(User $user): ?string
+    {
+        if ($user->role !== null) {
+            return $user->role;
+        }
+
+        return $user->exists
+            ? $user->newQuery()->whereKey($user->getKey())->value('role')
+            : null;
     }
 }
