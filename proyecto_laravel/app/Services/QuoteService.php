@@ -9,7 +9,6 @@ use App\Models\Quote;
 use App\Models\QuoteLine;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 class QuoteService
@@ -74,7 +73,7 @@ class QuoteService
                 QuoteLine::forceCreate([
                     'quote_id' => $quote->id,
                     'product_name' => $product->name,
-                    'product_type' => $product->type,
+                    'product_type' => $product->type instanceof \BackedEnum ? $product->type->value : (string) $product->type,
                     'pricing_model' => $pricingModel,
                     'quantity' => $item->quantity,
                     'unit_price_cents' => $unitPriceCents,
@@ -103,7 +102,7 @@ class QuoteService
         }
 
         // Mínimo 2 tipos distintos
-        $types = $cartItems->map(fn ($item) => $item->product->type)->unique()->count();
+        $types = $cartItems->map(fn ($item) => $item->product->type instanceof \BackedEnum ? $item->product->type->value : (string) $item->product->type)->unique()->count();
         if ($types < 2) {
             throw new \Exception('Se requieren al menos 2 tipos de producto distintos.');
         }
@@ -124,7 +123,9 @@ class QuoteService
         }
 
         // Default según tipo
-        return match ($product->type) {
+        $type = $product->type instanceof \BackedEnum ? $product->type->value : (string) $product->type;
+
+        return match ($type) {
             'soporte' => 'por_uso',
             'backup' => 'unico',
             default => 'mensual',

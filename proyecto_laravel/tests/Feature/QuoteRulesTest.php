@@ -4,11 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\CartItem;
 use App\Models\Product;
-use App\Models\Provider;
 use App\Models\Project;
+use App\Models\Provider;
 use App\Models\Region;
 use App\Models\User;
-use App\Services\QuoteService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -111,7 +110,7 @@ class QuoteRulesTest extends TestCase
 
         foreach ($types as $i => $type) {
             $product = Product::create([
-                'code' => 'prod-' . $i,
+                'code' => 'prod-'.$i,
                 'name' => $names[$i],
                 'type' => $type,
                 'unit_price' => 10.00,

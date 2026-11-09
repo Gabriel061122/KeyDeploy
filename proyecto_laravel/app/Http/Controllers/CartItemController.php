@@ -2,12 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CartItem;
-use App\Models\Product;
 use App\Http\Requests\StoreCartItemRequest;
 use App\Http\Requests\UpdateCartItemRequest;
-use Illuminate\View\View;
+use App\Models\CartItem;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\View\View;
 
 class CartItemController extends Controller
 {

@@ -16,12 +16,14 @@ return new class extends Migration
     {
         Schema::create('products', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('provider_id')->constrained('providers')->restrictOnDelete();
+            $table->foreignId('provider_id')->nullable()->constrained('providers')->nullOnDelete();
+            $table->string('code')->nullable();
             $table->string('name', 100);
             $table->text('description')->nullable();
             $table->string('type');
-            $table->string('billing_unit');
-            $table->json('config');
+            $table->decimal('unit_price', 10, 2)->nullable();
+            $table->string('billing_unit')->default('mes');
+            $table->json('config')->nullable();
             $table->boolean('active')->default(true);
             $table->timestamps();
 

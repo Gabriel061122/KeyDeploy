@@ -5,14 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Project;
 use App\Models\Quote;
 use App\Services\QuoteService;
-use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\View\View;
 
 class QuoteController extends Controller
 {
-    public function __construct(protected QuoteService $quoteService)
-    {
-    }
+    public function __construct(protected QuoteService $quoteService) {}
 
     /**
      * Emitir un presupuesto desde el carrito del usuario.

@@ -19,9 +19,10 @@ return new class extends Migration
             $table->id();
             $table->foreignId('product_id')->constrained('products')->cascadeOnDelete();
             $table->foreignId('region_id')->constrained('regions')->restrictOnDelete();
+            $table->foreignId('provider_id')->nullable()->constrained('providers')->nullOnDelete();
             $table->boolean('available')->default(true);
-            $table->unsignedInteger('price_cents');
-            $table->string('pricing_model');
+            $table->unsignedInteger('price_cents')->default(0);
+            $table->string('pricing_model')->default('mensual');
             $table->timestamps();
 
             $table->unique(['product_id', 'region_id']);

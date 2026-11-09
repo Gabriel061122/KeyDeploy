@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * Presupuesto emitido (snapshot histórico inmutable).
@@ -18,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $subtotal_monthly_cents
  * @property int $subtotal_one_time_cents
  * @property int $total_cents
- * @property \Illuminate\Support\Carbon $issued_at
+ * @property Carbon $issued_at
  */
 class Quote extends Model
 {

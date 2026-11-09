@@ -4,10 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\CartItem;
 use App\Models\Product;
-use App\Models\Provider;
 use App\Models\Project;
-use App\Models\Quote;
-use App\Models\QuoteLine;
+use App\Models\Provider;
 use App\Models\Region;
 use App\Models\User;
 use App\Services\QuoteService;
@@ -108,7 +106,7 @@ class QuoteImmutabilityTest extends TestCase
         ]);
 
         // Emitir presupuesto
-        $service = new QuoteService();
+        $service = new QuoteService;
         $quote = $service->emitFromCart($user, $project);
 
         // Guardar los valores originales del presupuesto
@@ -160,7 +158,7 @@ class QuoteImmutabilityTest extends TestCase
         $project = Project::factory()->create(['user_id' => $user->id]);
 
         // Carrito vacío: la emisión debe fallar
-        $service = new QuoteService();
+        $service = new QuoteService;
 
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('No se puede emitir presupuesto: el carrito está vacío.');

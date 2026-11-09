@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreProjectFileRequest;
 use App\Models\Project;
 use App\Models\ProjectFile;
-use App\Http\Requests\StoreProjectFileRequest;
-use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ProjectFileController extends Controller
 {
@@ -22,7 +22,7 @@ class ProjectFileController extends Controller
 
         $file = $request->file('file');
         $extension = $file->getClientOriginalExtension();
-        $storagePath = 'project-files/' . Str::uuid() . '.' . $extension;
+        $storagePath = 'project-files/'.Str::uuid().'.'.$extension;
 
         try {
             $path = Storage::disk('public')->put($storagePath, $file->get());
@@ -40,6 +40,7 @@ class ProjectFileController extends Controller
             if (isset($storagePath) && Storage::disk('public')->exists($storagePath)) {
                 Storage::disk('public')->delete($storagePath);
             }
+
             return redirect()->back()
                 ->withErrors(['file' => 'Error al guardar el fichero. Inténtalo de nuevo.']);
         }
@@ -51,11 +52,11 @@ class ProjectFileController extends Controller
     /**
      * Ver/descargar un fichero.
      */
-    public function show(ProjectFile $file): Response|\Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function show(ProjectFile $file): Response|BinaryFileResponse
     {
         abort_unless($file->project->user_id === auth()->id(), 403);
 
-        if (!Storage::disk('public')->exists($file->storage_path)) {
+        if (! Storage::disk('public')->exists($file->storage_path)) {
             abort(404, 'Fichero no encontrado.');
         }
 
@@ -71,7 +72,7 @@ class ProjectFileController extends Controller
 
         $newFile = $request->file('file');
         $extension = $newFile->getClientOriginalExtension();
-        $newStoragePath = 'project-files/' . Str::uuid() . '.' . $extension;
+        $newStoragePath = 'project-files/'.Str::uuid().'.'.$extension;
         $project = $file->project;
 
         try {

@@ -2,12 +2,12 @@
 
 namespace Tests\Concerns;
 
-use App\Enums\PricingModel;
 use App\Enums\ProductType;
 use App\Models\Product;
 use App\Models\Provider;
 use App\Models\Region;
 use App\Models\User;
+use Illuminate\Support\Str;
 
 /**
  * Datos de catálogo reutilizables para las pruebas: una región base,
@@ -49,10 +49,11 @@ trait CreatesCatalogData
     protected function createProduct(string $name, string|ProductType $type, array $regionIds, bool $active = true): Product
     {
         $provider = Provider::first() ?? Provider::create(['name' => 'TestProvider']);
+        $code = $this->uniqueCode(Str::slug($name));
 
         $product = Product::query()->create([
             'code' => $code,
-            'name' => 'Producto '.$code,
+            'name' => $name,
             'type' => $type,
             'unit_price' => 10.00,
             'provider_id' => $provider->id,

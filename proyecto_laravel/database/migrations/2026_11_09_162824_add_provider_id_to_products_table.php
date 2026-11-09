@@ -12,10 +12,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('products', function (Blueprint $table) {
-            $table->foreignId('provider_id')->nullable()->after('type')
-                ->constrained()->nullOnDelete();
-        });
+        if (! Schema::hasColumn('products', 'provider_id')) {
+            Schema::table('products', function (Blueprint $table) {
+                $table->foreignId('provider_id')->nullable()->after('type')
+                    ->constrained()->nullOnDelete();
+            });
+        }
     }
 
     /**

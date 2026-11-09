@@ -15,14 +15,26 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::rename('product_region', 'product_availabilities');
+        if (Schema::hasTable('product_region') && ! Schema::hasTable('product_availabilities')) {
+            Schema::rename('product_region', 'product_availabilities');
+        }
 
-        Schema::table('product_availabilities', function (Blueprint $table) {
-            $table->foreignId('provider_id')->after('region_id')->constrained()->restrictOnDelete();
-            $table->boolean('available')->default(true)->after('provider_id');
-            $table->unsignedBigInteger('price_cents')->default(0)->after('available');
-            $table->string('pricing_model', 20)->default('mensual')->after('price_cents');
-        });
+        if (Schema::hasTable('product_availabilities')) {
+            Schema::table('product_availabilities', function (Blueprint $table) {
+                if (! Schema::hasColumn('product_availabilities', 'provider_id')) {
+                    $table->foreignId('provider_id')->nullable()->after('region_id')->constrained()->nullOnDelete();
+                }
+                if (! Schema::hasColumn('product_availabilities', 'available')) {
+                    $table->boolean('available')->default(true)->after('provider_id');
+                }
+                if (! Schema::hasColumn('product_availabilities', 'price_cents')) {
+                    $table->unsignedBigInteger('price_cents')->default(0)->after('available');
+                }
+                if (! Schema::hasColumn('product_availabilities', 'pricing_model')) {
+                    $table->string('pricing_model', 20)->default('mensual')->after('price_cents');
+                }
+            });
+        }
     }
 
     /**

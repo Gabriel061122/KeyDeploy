@@ -19,11 +19,12 @@ class ProjectFileFactory extends Factory
     public function definition(): array
     {
         $extension = $this->faker->randomElement(['pdf', 'png', 'jpg', 'docx', 'md']);
+
         return [
             'project_id' => Project::factory(),
             'architecture_id' => null,
-            'original_name' => $this->faker->words(3, true) . '.' . $extension,
-            'storage_path' => 'project-files/' . uniqid() . '.' . $extension,
+            'original_name' => $this->faker->words(3, true).'.'.$extension,
+            'storage_path' => 'project-files/'.uniqid().'.'.$extension,
             'mime_type' => match ($extension) {
                 'pdf' => 'application/pdf',
                 'png' => 'image/png',

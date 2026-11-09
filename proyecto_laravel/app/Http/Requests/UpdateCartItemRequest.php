@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateCartItemRequest extends FormRequest
@@ -13,6 +12,7 @@ class UpdateCartItemRequest extends FormRequest
     public function authorize(): bool
     {
         $item = $this->route('item');
+
         return $item && $item->user_id === auth()->id();
     }
 

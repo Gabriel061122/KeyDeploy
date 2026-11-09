@@ -33,10 +33,11 @@ class Product extends Model
      * @var array<int, string>
      */
     protected $fillable = [
-        'provider_id',
+        'code',
         'name',
         'description',
         'type',
+        'unit_price',
         'billing_unit',
         'config',
         'active',
@@ -49,14 +50,30 @@ class Product extends Model
     protected function casts(): array
     {
         return [
-            'type' => ProductType::class,
+            'unit_price' => 'decimal:2',
             'config' => 'array',
             'active' => 'boolean',
         ];
     }
 
     /**
-     * Proveedor del producto (1:N con política restrict).
+     * Mutador para admitir tanto ProductType enum como string.
+     */
+    public function setTypeAttribute($value): void
+    {
+        $this->attributes['type'] = $value instanceof ProductType ? $value->value : (string) $value;
+    }
+
+    /**
+     * Helper opcional para obtener el Enum correspondiente.
+     */
+    public function typeEnum(): ?ProductType
+    {
+        return ProductType::tryFrom($this->attributes['type'] ?? '');
+    }
+
+    /**
+     * Proveedor del producto (1:N con política restrict/null).
      */
     public function provider(): BelongsTo
     {
@@ -79,14 +96,6 @@ class Product extends Model
         return $this->belongsToMany(Region::class, 'product_availabilities')
             ->withPivot('provider_id', 'available', 'price_cents', 'pricing_model')
             ->withTimestamps();
-    }
-
-    /**
-     * Proveedor del producto.
-     */
-    public function provider(): BelongsTo
-    {
-        return $this->belongsTo(Provider::class);
     }
 
     /**
@@ -130,10 +139,10 @@ class Product extends Model
     }
 
     /**
-     * Identificador amigable en slug del producto.
+     * Identificador amigable en slug del producto o código explícito.
      */
-    public function getCodeAttribute(): string
+    public function getCodeAttribute(): ?string
     {
-        return Str::slug($this->name);
+        return $this->attributes['code'] ?? Str::slug($this->name);
     }
 }

@@ -4,6 +4,7 @@ namespace Tests\Unit\Services;
 
 use App\Models\CartItem;
 use App\Models\Product;
+use App\Models\Project;
 use App\Models\Provider;
 use App\Models\Region;
 use App\Models\User;
@@ -96,12 +97,12 @@ class PriceCalculationTest extends TestCase
             'config' => ['region_id' => $region->id],
         ]);
 
-        $project = \App\Models\Project::factory()->create([
+        $project = Project::factory()->create([
             'user_id' => $user->id,
             'region_id' => $region->id,
         ]);
 
-        $service = new QuoteService();
+        $service = new QuoteService;
         $quote = $service->emitFromCart($user, $project);
 
         // 2 * 3200 + 1 * 990 + 1 * 1800 = 9190 céntimos mensuales
@@ -192,12 +193,12 @@ class PriceCalculationTest extends TestCase
             'config' => ['region_id' => $region->id],
         ]);
 
-        $project = \App\Models\Project::factory()->create([
+        $project = Project::factory()->create([
             'user_id' => $user->id,
             'region_id' => $region->id,
         ]);
 
-        $service = new QuoteService();
+        $service = new QuoteService;
         $quote = $service->emitFromCart($user, $project);
 
         // Mensual: 1 * 3200 + 1 * 1800 = 5000
