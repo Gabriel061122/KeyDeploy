@@ -3,13 +3,14 @@
 namespace Tests\Concerns;
 
 use App\Models\Product;
+use App\Models\Provider;
 use App\Models\Region;
 use App\Models\User;
 
 /**
  * Datos de catálogo reutilizables para las pruebas: una región base,
  * productos activos/inactivos y disponibilidad por región tal como
- * declara el contrato de integración (products + product_region).
+ * declara el contrato de integración (products + product_availabilities).
  */
 trait CreatesCatalogData
 {
@@ -28,26 +29,38 @@ trait CreatesCatalogData
     /**
      * Crea un producto y su disponibilidad en las regiones indicadas.
      *
-     * @param  list<string>  $regionIds
+     * @param  list<int>  $regionIds
      */
     protected function createProduct(string $code, string $type, array $regionIds, bool $active = true): Product
     {
+        $provider = Provider::first() ?? Provider::create(['name' => 'TestProvider']);
+
         $product = Product::query()->create([
             'code' => $code,
             'name' => 'Producto '.$code,
             'type' => $type,
             'unit_price' => 10.00,
+            'provider_id' => $provider->id,
             'active' => $active,
         ]);
 
-        $product->regions()->sync($regionIds);
+        $pivotData = collect($regionIds)->mapWithKeys(function ($regionId) use ($provider) {
+            return [$regionId => [
+                'provider_id' => $provider->id,
+                'available' => true,
+                'price_cents' => 1000,
+                'pricing_model' => 'mensual',
+            ]];
+        })->all();
+
+        $product->regions()->sync($pivotData);
 
         return $product;
     }
 
     /**
      * Tres elementos válidos: computación + almacenamiento + red
-     * disponibles en la región dada (cumuple: 3 elementos, 2+ tipos).
+     * disponibles en la región dada (cumple: 3 elementos, 2+ tipos).
      */
     protected function validItemsFor(Region $region): array
     {

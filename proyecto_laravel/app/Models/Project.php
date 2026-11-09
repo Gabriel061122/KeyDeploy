@@ -71,6 +71,22 @@ class Project extends Model
     }
 
     /**
+     * Presupuestos emitidos para este proyecto.
+     */
+    public function quotes(): HasMany
+    {
+        return $this->hasMany(Quote::class);
+    }
+
+    /**
+     * Ficheros adjuntos al proyecto.
+     */
+    public function files(): HasMany
+    {
+        return $this->hasMany(ProjectFile::class);
+    }
+
+    /**
      * Ámbito de trabajo habitual: los proyectos del usuario autenticado.
      *
      * @param  Builder<Project>  $query

@@ -52,4 +52,12 @@ class Architecture extends Model
     {
         return $this->hasMany(ArchitectureItem::class)->orderBy('id');
     }
+
+    /**
+     * Ficheros adjuntos a esta arquitectura.
+     */
+    public function files(): HasMany
+    {
+        return $this->hasMany(ProjectFile::class, 'architecture_id');
+    }
 }

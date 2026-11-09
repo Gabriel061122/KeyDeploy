@@ -6,6 +6,7 @@ use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
@@ -52,6 +53,7 @@ class Product extends Model
         'type',
         'unit_price',
         'active',
+        'provider_id',
     ];
 
     /**
@@ -67,11 +69,21 @@ class Product extends Model
 
     public function regions(): BelongsToMany
     {
-        return $this->belongsToMany(Region::class, 'product_region');
+        return $this->belongsToMany(Region::class, 'product_availabilities')
+            ->withPivot('provider_id', 'available', 'price_cents', 'pricing_model')
+            ->withTimestamps();
     }
 
     /**
-     * Productos activos con disponibilidad declarada en `product_region`.
+     * Proveedor del producto.
+     */
+    public function provider(): BelongsTo
+    {
+        return $this->belongsTo(Provider::class);
+    }
+
+    /**
+     * Productos activos con disponibilidad declarada en `product_availabilities`.
      *
      * @param  Builder<Product>  $query
      * @return Builder<Product>

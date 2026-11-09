@@ -12,7 +12,7 @@ class ProductFactory extends Factory
 {
     public function definition(): array
     {
-        $suffix = $this->unique()->numberBetween(100000, 999999);
+        $suffix = substr(bin2hex(random_bytes(5)), 0, 6);
 
         return [
             'code' => 'prd-'.$suffix,

@@ -17,11 +17,22 @@ class DatabaseSeeder extends Seeder
         $this->call(CatalogDemoSeeder::class);
 
         if (app()->environment('local', 'testing', 'development')) {
+            // Usuario de demostración
             User::firstOrCreate(
                 ['email' => 'demo@keydeploy.test'],
                 [
                     'name' => 'Cliente de demostración',
                     'password' => 'clave1234',
+                    'role' => User::ROLE_CLIENTE,
+                ],
+            );
+
+            // Usuario de desarrollo
+            User::firstOrCreate(
+                ['email' => 'dev@keydeploy.test'],
+                [
+                    'name' => 'Usuario de desarrollo',
+                    'password' => 'password',
                     'role' => User::ROLE_CLIENTE,
                 ],
             );

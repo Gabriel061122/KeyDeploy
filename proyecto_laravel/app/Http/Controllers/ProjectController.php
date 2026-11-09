@@ -62,11 +62,15 @@ class ProjectController extends Controller
         $project->load('region');
         $requirements = $project->requirements()->orderBy('id')->get();
         $architectures = $project->architectures()->with(['region', 'items.product'])->get();
+        $files = $project->files()->orderByDesc('id')->get();
+        $quotes = $project->quotes()->with('user')->orderByDesc('id')->get();
 
         return view('projects.show', [
             'project' => $project,
             'requirements' => $requirements,
             'architectures' => $architectures,
+            'files' => $files,
+            'quotes' => $quotes,
         ]);
     }
 
