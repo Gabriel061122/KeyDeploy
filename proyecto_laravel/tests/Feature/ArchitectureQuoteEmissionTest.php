@@ -394,6 +394,45 @@ class ArchitectureQuoteEmissionTest extends TestCase
     }
 
     /**
+     * Sección 6: el dueño del proyecto solo puede emitir desde una
+     * arquitectura manual, no desde otra procedencia como IA.
+     */
+    public function test_an_owner_cannot_emit_from_a_non_manual_architecture(): void
+    {
+        [$owner, $architecture] = $this->architectureWithThreeElements('procedencia-ia');
+        $action = $this->quoteEmissionAction($owner, $architecture);
+
+        Architecture::query()->whereKey($architecture->id)->update([
+            'source' => Architecture::SOURCE_IA,
+        ]);
+
+        $this->postEmissionTo($owner, $action)->assertForbidden();
+        $this->assertNothingQuoted();
+    }
+
+    /**
+     * La autorización de CLIENTE se aplica además de la propiedad: una
+     * cuenta de otro rol no ve el formulario y una acción ya conocida se
+     * rechaza en el servidor.
+     */
+    public function test_only_a_cliente_owner_can_emit_from_an_architecture(): void
+    {
+        [$owner, $architecture] = $this->architectureWithThreeElements('rol-no-cliente');
+        $action = $this->quoteEmissionAction($owner, $architecture);
+
+        $owner->forceFill(['role' => 'arquitecto'])->save();
+        $owner->refresh();
+
+        $detail = $this->actingAs($owner)
+            ->get(route('architectures.show', $architecture))
+            ->assertOk();
+        $detail->assertDontSee('Emitir presupuesto desde esta arquitectura');
+
+        $this->postEmissionTo($owner, $action)->assertForbidden();
+        $this->assertNothingQuoted();
+    }
+
+    /**
      * Criterio 10: la acción también exige sesión para quien solo conoce la
      * URL del formulario.
      */
