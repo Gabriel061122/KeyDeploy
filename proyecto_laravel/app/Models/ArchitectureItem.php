@@ -29,6 +29,7 @@ class ArchitectureItem extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'architecture_id',
         'product_id',
         'quantity',
         'config',

@@ -2,15 +2,16 @@
 
 namespace App\Services;
 
+use App\Enums\ProductType;
 use App\Models\Product;
 use App\Models\Region;
 use Illuminate\Support\Collection;
 
 /**
- * Validación de dominio de las arquitecturas manuales.
+ * Validación de dominio de las arquitecturas manuales (sección 7.1 UT2 / RN05 / RN08).
  *
  * Concentra TODAS las reglas que dependen de varias tablas o relacional
- * entre elementos: mínimo de elementos, variedada de tipos, productos
+ * entre elementos: mínimo de elementos, variedad de tipos, productos
  * existentes, activos y disponibles en la región (RN05) y coherencia de
  * cantidades y configuraciones JSON. Los form requests y los
  * controladores delegan en este servicio en lugar de duplicar las reglas.
@@ -63,7 +64,7 @@ final class ArchitectureValidator
         foreach ($sanitized as $element) {
             $product = $products->get($element['product_id']);
             if ($product !== null && ! in_array($element['product_id'], $problems, true)) {
-                $types[] = $product->type;
+                $types[] = $product->type instanceof ProductType ? $product->type->value : (string) $product->type;
             }
         }
 
@@ -88,6 +89,7 @@ final class ArchitectureValidator
      *
      * @param  list<string>  $errors
      * @param  list<int>  $productIds
+     * @return array{product_id: int, quantity: int, config: array<string, mixed>}|null
      */
     private function processRow(int $index, array $item, array &$errors, array &$productIds): ?array
     {
@@ -100,33 +102,70 @@ final class ArchitectureValidator
             return null;
         }
 
-        $quantity = (int) trim((string) $quantity);
-        if ($quantity < 1) {
-            $errors[] = sprintf('El elemento %d necesita una cantidad mayor o igual que 1.', $position);
+        $quantityInt = (int) $quantity;
+        if ($quantityInt < 1) {
+            $errors[] = sprintf('El elemento %d necesita una cantidad entera mayor o igual que 1.', $position);
 
             return null;
         }
 
-        $productId = $item['product_id'] ?? null;
-        if ($productId === null || trim((string) $productId) === '' || ! ctype_digit(trim((string) $productId))) {
-            $errors[] = sprintf('El elemento %d necesita un producto válido del catálogo.', $position);
+        $productId = isset($item['product_id']) ? (int) $item['product_id'] : 0;
+        if ($productId < 1) {
+            $errors[] = sprintf('El elemento %d no tiene un producto seleccionado.', $position);
 
             return null;
         }
-        $productId = (int) $productId;
+
+        $decodedConfig = $this->decodeConfig($item['config'] ?? null, $position, $errors);
+        if ($decodedConfig === null) {
+            return null;
+        }
+
         $productIds[] = $productId;
 
-        $config = $this->decodeConfig($item['config'] ?? null);
-        if ($config === null) {
+        return [
+            'product_id' => $productId,
+            'quantity' => $quantityInt,
+            'config' => $decodedConfig,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $errors
+     * @return array<string, mixed>|null
+     */
+    private function decodeConfig(mixed $rawConfig, int $position, array &$errors): ?array
+    {
+        if (is_array($rawConfig)) {
+            return $rawConfig;
+        }
+
+        $trimmed = trim((string) $rawConfig);
+        if ($trimmed === '') {
+            return [];
+        }
+
+        try {
+            $decoded = json_decode($trimmed, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
             $errors[] = sprintf(
-                'El elemento %d necesita una configuración JSON válida (por ejemplo {"instancia": "t3.medium"}).',
+                'El elemento %d contiene una configuración JSON no válida.',
                 $position,
             );
 
             return null;
         }
 
-        return ['product_id' => $productId, 'quantity' => $quantity, 'config' => $config];
+        if (! is_array($decoded)) {
+            $errors[] = sprintf(
+                'La configuración del elemento %d debe ser un objeto JSON (p. ej. {"ram": "4GB"}).',
+                $position,
+            );
+
+            return null;
+        }
+
+        return $decoded;
     }
 
     /**
@@ -140,7 +179,7 @@ final class ArchitectureValidator
         }
 
         return Product::query()
-            ->with('regions')
+            ->with(['regions', 'availabilities', 'provider'])
             ->whereIn('id', array_unique($productIds))
             ->get()
             ->keyBy('id');
@@ -149,10 +188,11 @@ final class ArchitectureValidator
     /**
      * Comprueba existencia, estado activo y disponibilidad en la región
      * (RN05: no se contrata un producto no disponible en la región) usando
-     * una única consulta con la relación `regions` cargada.
+     * la relación `availabilities` cargada.
      *
      * @param  array<int, array<string, mixed>>  $items
      * @param  Collection<int, Product>  $products
+     * @param  list<string>  $errors
      * @return list<int>
      */
     private function checkProducts(array $items, Collection $products, Region $region, array &$errors): array
@@ -161,12 +201,12 @@ final class ArchitectureValidator
 
         foreach ($items as $index => $item) {
             $productId = isset($item['product_id']) ? (int) $item['product_id'] : 0;
-            if ($productId < 1 || ! $products->has($productId)) {
+            if ($productId < 1) {
                 continue;
             }
 
-            $product = $products->get($productId);
             $position = $index + 1;
+            $product = $products->get($productId);
 
             if ($product === null) {
                 $errors[] = sprintf(
@@ -190,7 +230,10 @@ final class ArchitectureValidator
                 continue;
             }
 
-            $available = $product->regions->contains('id', $region->id);
+            // Comprobar disponibilidad activa en la región en product_availabilities
+            $availability = $product->availabilities->firstWhere('region_id', $region->id);
+            $available = $availability !== null && $availability->available;
+
             if (! $available) {
                 $errors[] = sprintf(
                     'El elemento %d usa "%s", que no está disponible en la región "%s".',
@@ -203,28 +246,5 @@ final class ArchitectureValidator
         }
 
         return array_values(array_unique($broken));
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function decodeConfig(mixed $rawConfig): ?array
-    {
-        if (is_array($rawConfig)) {
-            return $rawConfig;
-        }
-
-        if (is_string($rawConfig)) {
-            $rawConfig = trim($rawConfig);
-            if ($rawConfig === '') {
-                return [];
-            }
-
-            $decoded = json_decode($rawConfig, true);
-
-            return is_array($decoded) ? $decoded : null;
-        }
-
-        return null;
     }
 }

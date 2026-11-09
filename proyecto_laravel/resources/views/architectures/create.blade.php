@@ -22,13 +22,13 @@
         <select id="region_id" name="region_id">
             <option value="">— Elige una región —</option>
             @foreach ($regions as $region)
-                <option value="{{ $region->id }}" @selected((int) $region->id === $selectedRegionId)>{{ $region->name }} ({{ $region->code }})</option>
+                <option value="{{ $region->id }}" @selected((int) $region->id === $selectedRegionId)>{{ $region->name }} ({{ $region->code }}){{ $region->is_eu ? ' [UE]' : '' }}</option>
             @endforeach
         </select>
         <button type="submit" class="btn">Actualizar</button>
     </div>
     @error('region_id') <p class="field-error">{{ $message }}</p> @enderror
-    <p class="muted">Al actualizar se muestra el catálogo disponible en la región elegida: productos retirados o no disponibles no podrán usarse.</p>
+    <p class="muted">Al actualizar se muestra el catálogo disponible en la región elegida: productos retirados o no disponibles no podrán usarse (RN05).</p>
 </form>
 
 {{--
@@ -68,7 +68,7 @@
                         <option value="">— sin producto —</option>
                         @foreach ($products as $product)
                             <option value="{{ $product->id }}" @selected((string) $rowState[$i]['product_id'] === (string) $product->id)>
-                                {{ $product->code }} — {{ $product->name }} ({{ $product->type }})
+                                {{ $product->name }} [{{ $product->code }}] ({{ $product->type instanceof \App\Enums\ProductType ? $product->type->label() : $product->type }}) — {{ $product->provider?->name }} — {{ number_format($product->priceInRegion($selectedRegionId) ?? 0, 2) }} €/{{ $product->billing_unit }}
                             </option>
                         @endforeach
                     </select>
@@ -81,7 +81,7 @@
                 </div>
             </div>
             <label for="config_{{ $i }}">Configuración JSON individual</label>
-            <textarea id="config_{{ $i }}" name="items[{{ $i }}][config]" placeholder='{"instancia": "t3.medium", "disco_gb": 100}'>{{ $rowState[$i]['config'] }}</textarea>
+            <textarea id="config_{{ $i }}" name="items[{{ $i }}][config]" placeholder='{"vcpu": 2, "ram_gb": 4}'>{{ $rowState[$i]['config'] }}</textarea>
             @error('items.'.$i.'.config') <p class="field-error">{{ $message }}</p> @enderror
         </fieldset>
     @endfor

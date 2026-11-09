@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreArchitectureRequest;
 use App\Models\Architecture;
+use App\Models\ArchitectureItem;
 use App\Models\Product;
 use App\Models\Project;
 use App\Models\Region;
@@ -15,18 +16,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
- * Creación manual de arquitecturas para un Proyecto propio, sin
- * depender de la IA (complemento manual de los flujos RF04/CU04).
+ * Creación manual de arquitecturas (RN05 / RN08 / EP04).
  *
- * Flujo sin JavaScript: formulario → (POST) validación completa con
- * StoreArchitectureRequest y ArchitectureValidator → previsualización
- * (GET sobre un borrador en sesión) → confirmación → guardado atómico
- * con DB::transaction (arquitectura + todos sus elementos). Nunca se
- * persiste una arquitectura parcialmente válida.
+ * Flujo en tres pasos con pantalla de previsualización antes de guardar:
+ * 1. Formulario inicial: región, productos disponibles y filas por elemento.
+ * 2. Revisión / previsualización: validación completa y resumen con precios.
+ * 3. Confirmación y guardado definitivo: escritura atómica en DB::transaction().
  */
 class ArchitectureController extends Controller
 {
-    /** Clave del borrador pendiente de confirmar en la sesión. */
     public const DRAFT_KEY = 'architecture_draft';
 
     public function __construct(public ArchitectureValidator $architectureValidator) {}
@@ -35,9 +33,6 @@ class ArchitectureController extends Controller
      * Formulario de alta: región, productos disponibles (filtrados por
      * la región elegida, recargando la página con un GET) y una fila por
      * elemento con producto, cantidad y configuración JSON individual.
-     *
-     * Si existe un borrador pendiente de revisión, sus valores rellenan
-     * el formulario para que "Volver al formulario" no pierda datos.
      */
     public function create(Project $project, Request $request): View
     {
@@ -47,9 +42,6 @@ class ArchitectureController extends Controller
 
         $regions = Region::query()->orderBy('name')->get();
 
-        // La región puede venir del GET (botón "Actualizar"), de los
-        // datos antiguos de una validación fallida o del borrador; de la
-        // combinación real se vuelve a comprobar todo al guardar.
         $selectedRegionId = $request->input('region_id')
             ?? $request->old('region_id')
             ?? $draft['region_id']
@@ -99,48 +91,48 @@ class ArchitectureController extends Controller
         return view('architectures.create', [
             'project' => $project,
             'regions' => $regions,
+            'selectedRegionId' => $selectedRegionId,
             'products' => $products,
             'slots' => $slots,
             'rowState' => $rowState,
-            'selectedRegionId' => $selectedRegionId,
-            'name' => (string) $name,
+            'name' => $name,
         ]);
     }
 
     /**
-     * Valida todo el borrador y lo almacena en la sesión para la
-     * previsualización: el usuario revisa los elementos antes de
-     * confirmar, y el guardado final revalida de nuevo porque la sesión
-     * nunca sustituye a la comprobación en el servidor.
+     * Paso de revisión: valida todo el conjunto mediante StoreArchitectureRequest
+     * y guarda el borrador validado en la sesión.
      */
-    public function preview(StoreArchitectureRequest $request, Project $project): RedirectResponse
+    public function review(StoreArchitectureRequest $request, Project $project): RedirectResponse
     {
-        $validated = $request->validated();
-        $region = Region::query()->findOrFail($validated['region_id']);
+        $this->authorize('create', [Architecture::class, $project]);
 
-        $result = $this->architectureValidator->validate($region, $validated['items']);
+        $region = Region::query()->findOrFail((int) $request->input('region_id'));
+        $validation = $this->architectureValidator->validate($region, $request->input('items', []));
 
-        if (! $result['valid']) {
-            // Defensa adicional: el Form Request ya debería haber
-            // detectado cualquier error de dominio.
-            return back()
-                ->withInput()
-                ->withErrors(['items' => $result['errors']]);
-        }
-
-        $request->session()->put(self::DRAFT_KEY, [
+        $draft = [
             'project_id' => $project->id,
-            'name' => $validated['name'],
             'region_id' => $region->id,
-            'items' => $result['items'],
-        ]);
+            'name' => (string) $request->input('name'),
+            'items' => $validation['items'],
+        ];
+
+        $request->session()->put(self::DRAFT_KEY, $draft);
 
         return redirect()->route('projects.architectures.check', $project);
     }
 
     /**
-     * Previsualización del borrador validado: nombre, región y cada
-     * elemento (producto, cantidad y configuración) antes de guardar.
+     * Alias de review para compatibilidad de rutas y llamadas internas.
+     */
+    public function preview(StoreArchitectureRequest $request, Project $project): RedirectResponse
+    {
+        return $this->review($request, $project);
+    }
+
+    /**
+     * Previsualización del borrador validado: nombre, región, productos,
+     * precios y cada elemento antes de guardar.
      */
     public function check(Request $request, Project $project): View|RedirectResponse
     {
@@ -156,6 +148,7 @@ class ArchitectureController extends Controller
 
         $region = Region::query()->findOrFail($draft['region_id']);
         $products = Product::query()
+            ->with(['provider', 'availabilities'])
             ->whereIn('id', array_column($draft['items'], 'product_id'))
             ->get()
             ->keyBy('id');
@@ -191,20 +184,26 @@ class ArchitectureController extends Controller
         if (! $result['valid']) {
             return redirect()
                 ->route('projects.architectures.create', $project)
-                ->withInput()
-                ->withErrors(['items' => $result['errors']]);
+                ->withErrors($result['errors']);
         }
 
+        /** @var Architecture $architecture */
         $architecture = DB::transaction(function () use ($project, $draft, $result): Architecture {
-            $architecture = new Architecture([
+            $architecture = Architecture::query()->create([
+                'project_id' => $project->id,
                 'region_id' => $draft['region_id'],
                 'name' => $draft['name'],
+                'source' => Architecture::SOURCE_MANUAL,
             ]);
-            $architecture->project_id = $project->id;
-            $architecture->source = Architecture::SOURCE_MANUAL;
-            $architecture->save();
 
-            $architecture->items()->createMany($result['items']);
+            foreach ($result['items'] as $item) {
+                ArchitectureItem::query()->create([
+                    'architecture_id' => $architecture->id,
+                    'product_id' => $item['product_id'],
+                    'quantity' => $item['quantity'],
+                    'config' => $item['config'],
+                ]);
+            }
 
             return $architecture;
         });
@@ -213,41 +212,56 @@ class ArchitectureController extends Controller
 
         return redirect()
             ->route('architectures.show', $architecture)
-            ->with('success', 'Arquitectura "'.$architecture->name.'" guardada con '.$architecture->items()->count().' elementos.');
+            ->with('success', 'Arquitectura manual guardada correctamente.');
     }
 
+    /**
+     * Listado de arquitecturas asociadas a un proyecto.
+     */
     public function index(Project $project): View
     {
         $this->authorize('view', $project);
 
+        $architectures = $project->architectures()
+            ->with(['region', 'items.product.provider'])
+            ->withCount('items')
+            ->latest()
+            ->get();
+
         return view('architectures.index', [
             'project' => $project,
-            'architectures' => $project->architectures()->with(['region', 'items.product'])->get(),
+            'architectures' => $architectures,
         ]);
     }
 
+    /**
+     * Ficha detallada de una arquitectura y sus elementos.
+     */
     public function show(Architecture $architecture): View
     {
         $this->authorize('view', $architecture);
 
-        $architecture->load(['region', 'items.product', 'project']);
+        $architecture->load(['region', 'items.product.provider', 'items.product.availabilities', 'project']);
 
         return view('architectures.show', ['architecture' => $architecture]);
     }
 
     /**
      * Productos activos y disponibles en la región dada (RN05), en una
-     * única consulta con la disponibilidad comprobada frente a la BD: el
-     * identificador de región enviado no puede saltarse la comprobación.
+     * única consulta con la disponibilidad comprobada frente a la BD.
      *
      * @return Collection<int, Product>
      */
-    private function productsFor(?Region $region)
+    private function productsFor(?Region $region): Collection
     {
         if ($region === null) {
             return collect();
         }
 
-        return Product::query()->availableIn($region)->orderBy('name')->get();
+        return Product::query()
+            ->availableIn($region)
+            ->with(['provider', 'availabilities'])
+            ->orderBy('name')
+            ->get();
     }
 }

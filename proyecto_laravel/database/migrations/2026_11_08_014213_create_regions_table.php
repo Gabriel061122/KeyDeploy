@@ -7,18 +7,17 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Tabla de regiones del catálogo (contrato de integración EP03/RF12).
-     *
-     * Este módulo (EP04) solo necesita poder validar que una región existe
-     * y que un producto está disponible en ella. El CRUD del catálogo queda
-     * a cargo del miembro responsable de EP03.
+     * Tabla regions: regiones geográficas del catálogo (sección 5.1 UT2).
+     * Atributos: code (único), name, country (char 2), is_eu (boolean, default false).
      */
     public function up(): void
     {
         Schema::create('regions', function (Blueprint $table) {
             $table->id();
-            $table->string('code', 50)->unique();
-            $table->string('name', 100);
+            $table->string('code')->unique();
+            $table->string('name');
+            $table->char('country', 2)->default('US');
+            $table->boolean('is_eu')->default(false);
             $table->timestamps();
         });
     }
