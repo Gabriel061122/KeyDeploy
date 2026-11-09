@@ -5,14 +5,14 @@ namespace Tests\Concerns;
 use App\Enums\PricingModel;
 use App\Enums\ProductType;
 use App\Models\Product;
-use App\Models\ProductAvailability;
 use App\Models\Provider;
 use App\Models\Region;
 use App\Models\User;
 
 /**
- * Datos de catálogo reutilizables para las pruebas según el modelo oficial UT2:
- * providers, regions, products y product_availabilities.
+ * Datos de catálogo reutilizables para las pruebas: una región base,
+ * productos activos/inactivos y disponibilidad por región tal como
+ * declara el contrato de integración (products + product_availabilities).
  */
 trait CreatesCatalogData
 {
@@ -48,34 +48,34 @@ trait CreatesCatalogData
      */
     protected function createProduct(string $name, string|ProductType $type, array $regionIds, bool $active = true): Product
     {
-        $typeVal = $type instanceof ProductType ? $type->value : $type;
+        $provider = Provider::first() ?? Provider::create(['name' => 'TestProvider']);
 
         $product = Product::query()->create([
-            'provider_id' => $this->getProvider()->id,
-            'name' => 'Producto '.$name,
-            'description' => 'Descripción de pruebas para '.$name,
-            'type' => $typeVal,
-            'billing_unit' => 'mes',
-            'config' => ['vcpu' => 2, 'ram_gb' => 4],
+            'code' => $code,
+            'name' => 'Producto '.$code,
+            'type' => $type,
+            'unit_price' => 10.00,
+            'provider_id' => $provider->id,
             'active' => $active,
         ]);
 
-        foreach ($regionIds as $regionId) {
-            ProductAvailability::query()->create([
-                'product_id' => $product->id,
-                'region_id' => $regionId,
+        $pivotData = collect($regionIds)->mapWithKeys(function ($regionId) use ($provider) {
+            return [$regionId => [
+                'provider_id' => $provider->id,
                 'available' => true,
-                'price_cents' => 3000,
-                'pricing_model' => PricingModel::FijoMensual,
-            ]);
-        }
+                'price_cents' => 1000,
+                'pricing_model' => 'mensual',
+            ]];
+        })->all();
+
+        $product->regions()->sync($pivotData);
 
         return $product;
     }
 
     /**
-     * Tres elementos válidos: computación + almacenamiento + redes
-     * disponibles en la región dada (cumple: al menos 3 elementos, 2+ tipos).
+     * Tres elementos válidos: computación + almacenamiento + red
+     * disponibles en la región dada (cumple: 3 elementos, 2+ tipos).
      */
     protected function validItemsFor(Region $region): array
     {

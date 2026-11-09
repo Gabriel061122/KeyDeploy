@@ -79,6 +79,100 @@
     @endif
 </div>
 
+<!-- Ficheros adjuntos -->
+<div class="card">
+    <div class="toolbar">
+        <h2 style="margin:0;">Ficheros adjuntos</h2>
+    </div>
+
+    <!-- Formulario de subida -->
+    <form method="POST" action="{{ route('files.upload', $project) }}" enctype="multipart/form-data" class="mb-4">
+        @csrf
+        <div class="flex gap-2 items-center">
+            <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.docx,.md" required>
+            <button type="submit" class="btn btn-sm">Subir</button>
+        </div>
+        <p class="muted" style="font-size:0.75rem;margin-top:0.25rem">PDF, PNG, JPG, DOCX, MD — máx 10 MB</p>
+    </form>
+
+    @if(isset($files) && $files->isNotEmpty())
+        <table>
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Tipo</th>
+                    <th>Tamaño</th>
+                    <th>Subido</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($files as $file)
+                    <tr>
+                        <td>
+                            <a href="{{ route('files.show', $file) }}" target="_blank">{{ $file->original_name }}</a>
+                        </td>
+                        <td><span class="badge">{{ pathinfo($file->original_name, PATHINFO_EXTENSION) }}</span></td>
+                        <td>{{ number_format($file->size_bytes / 1024, 1) }} KB</td>
+                        <td>{{ $file->created_at->format('d/m/Y H:i') }}</td>
+                        <td class="flex gap-2">
+                            <!-- Sustituir -->
+                            <form method="POST" action="{{ route('files.replace', $file) }}" enctype="multipart/form-data" class="inline-flex gap-1">
+                                @csrf
+                                <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.docx,.md" required
+                                       style="font-size:0.7rem">
+                                <button type="submit" class="btn btn-sm btn-secondary">Sustituir</button>
+                            </form>
+                            <!-- Eliminar -->
+                            <form method="POST" action="{{ route('files.destroy', $file) }}">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-danger" title="Eliminar">✕</button>
+                            </form>
+                        </td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @else
+        <p class="empty">No hay ficheros adjuntos.</p>
+    @endif
+</div>
+
+<!-- Presupuestos emitidos -->
+@if(isset($quotes) && $quotes->isNotEmpty())
+<div class="card">
+    <div class="toolbar">
+        <h2 style="margin:0;">Presupuestos emitidos</h2>
+    </div>
+    <table>
+        <thead>
+            <tr><th>Nº</th><th>Fecha</th><th>Total</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach ($quotes as $q)
+                <tr>
+                    <td>#{{ $q->id }}</td>
+                    <td>{{ $q->issued_at->format('d/m/Y H:i') }}</td>
+                    <td>{{ number_format($q->total_cents / 100, 2) }} €</td>
+                    <td><a href="{{ route('quotes.show', $q) }}" class="btn btn-sm btn-secondary">Ver</a></td>
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
+</div>
+@endif
+
+<!-- Emitir presupuesto desde carrito -->
+<div class="card">
+    <h2>Emitir presupuesto</h2>
+    <p class="muted">Genera un presupuesto congelando las líneas del carrito actual.</p>
+    <form method="POST" action="{{ route('quotes.emit', $project) }}" class="mt-3">
+        @csrf
+        <button type="submit" class="btn">Emitir presupuesto desde el carrito</button>
+    </form>
+</div>
+
 <div class="actions">
     <a class="btn btn-secondary" href="{{ route('projects.index') }}">← Todos los proyectos</a>
 </div>

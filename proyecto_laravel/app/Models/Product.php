@@ -40,6 +40,7 @@ class Product extends Model
         'billing_unit',
         'config',
         'active',
+        'provider_id',
     ];
 
     /**
@@ -76,20 +77,20 @@ class Product extends Model
     public function regions(): BelongsToMany
     {
         return $this->belongsToMany(Region::class, 'product_availabilities')
-            ->withPivot(['available', 'price_cents', 'pricing_model'])
+            ->withPivot('provider_id', 'available', 'price_cents', 'pricing_model')
             ->withTimestamps();
     }
 
     /**
-     * Elementos de arquitectura manual que utilizan este producto.
+     * Proveedor del producto.
      */
-    public function architectureItems(): HasMany
+    public function provider(): BelongsTo
     {
-        return $this->hasMany(ArchitectureItem::class);
+        return $this->belongsTo(Provider::class);
     }
 
     /**
-     * Ámbito para filtrar solo productos activos y disponibles en la región elegida (RN05).
+     * Productos activos con disponibilidad declarada en `product_availabilities`.
      *
      * @param  Builder<Product>  $query
      * @return Builder<Product>

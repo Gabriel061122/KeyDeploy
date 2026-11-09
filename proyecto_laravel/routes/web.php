@@ -2,7 +2,10 @@
 
 use App\Http\Controllers\ArchitectureController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CartItemController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProjectFileController;
+use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\RequirementController;
 use Illuminate\Support\Facades\Route;
 
@@ -88,4 +91,32 @@ Route::middleware('auth')->group(function () {
     Route::get('arquitecturas/{architecture}', [ArchitectureController::class, 'show'])
         ->name('architectures.show')
         ->whereNumber('architecture');
+
+    // Carrito persistente (EP05)
+    Route::get('carrito', [CartItemController::class, 'index'])->name('cart.index');
+    Route::post('carrito', [CartItemController::class, 'store'])->name('cart.store');
+    Route::patch('carrito/{item}', [CartItemController::class, 'update'])->name('cart.update');
+    Route::delete('carrito/{item}', [CartItemController::class, 'destroy'])->name('cart.destroy');
+
+    // Presupuesto como snapshot (EP05)
+    Route::post('proyectos/{project}/presupuesto/emitir', [QuoteController::class, 'emit'])
+        ->name('quotes.emit')
+        ->whereNumber('project');
+    Route::get('presupuestos/{quote}', [QuoteController::class, 'show'])
+        ->name('quotes.show')
+        ->whereNumber('quote');
+
+    // Ficheros adjuntos (EP05)
+    Route::post('proyectos/{project}/ficheros', [ProjectFileController::class, 'upload'])
+        ->name('files.upload')
+        ->whereNumber('project');
+    Route::get('ficheros/{file}', [ProjectFileController::class, 'show'])
+        ->name('files.show')
+        ->whereNumber('file');
+    Route::post('ficheros/{file}/sustituir', [ProjectFileController::class, 'replace'])
+        ->name('files.replace')
+        ->whereNumber('file');
+    Route::delete('ficheros/{file}', [ProjectFileController::class, 'destroy'])
+        ->name('files.destroy')
+        ->whereNumber('file');
 });

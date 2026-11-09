@@ -10,12 +10,15 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class ProviderFactory extends Factory
 {
-    protected $model = Provider::class;
-
+    /**
+     * Define the model's default state.
+     *
+     * @return array<string, mixed>
+     */
     public function definition(): array
     {
         return [
-            'name' => fake()->unique()->company().' Cloud',
+            'name' => $this->faker->company(),
         ];
     }
 }

@@ -16,6 +16,8 @@ class ProductFactory extends Factory
 
     public function definition(): array
     {
+        $suffix = substr(bin2hex(random_bytes(5)), 0, 6);
+
         return [
             'provider_id' => Provider::factory(),
             'name' => 'Instancia '.fake()->words(2, true),
