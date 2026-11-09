@@ -65,7 +65,7 @@ trait CreatesCatalogData
                 'provider_id' => $provider->id,
                 'available' => true,
                 'price_cents' => 1000,
-                'pricing_model' => 'mensual',
+                'pricing_model' => 'fijo_mensual',
             ]];
         })->all();
 

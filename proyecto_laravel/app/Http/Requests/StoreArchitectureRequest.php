@@ -2,9 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Exceptions\PricingException;
 use App\Models\Architecture;
 use App\Models\Project;
 use App\Models\Region;
+use App\Services\ArchitecturePricingService;
 use App\Services\ArchitectureValidator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
@@ -22,8 +24,10 @@ class StoreArchitectureRequest extends FormRequest
 {
     public const ITEM_SLOTS = 6;
 
-    public function __construct(public ArchitectureValidator $architectureValidator)
-    {
+    public function __construct(
+        public ArchitectureValidator $architectureValidator,
+        public ArchitecturePricingService $pricingService,
+    ) {
         parent::__construct();
     }
 
@@ -73,6 +77,16 @@ class StoreArchitectureRequest extends FormRequest
 
             foreach ($result['errors'] as $error) {
                 $validator->errors()->add('items', $error);
+            }
+
+            if ($result['errors'] !== []) {
+                return;
+            }
+
+            try {
+                $this->pricingService->calculate($region, $result['items']);
+            } catch (PricingException $exception) {
+                $validator->errors()->add('items', $exception->getMessage());
             }
         });
     }

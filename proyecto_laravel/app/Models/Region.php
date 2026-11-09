@@ -50,7 +50,7 @@ class Region extends Model
     public function products(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'product_availabilities')
-            ->withPivot(['available', 'price_cents', 'pricing_model'])
+            ->withPivot(['available', 'price_cents', 'one_time_price_cents', 'pricing_model'])
             ->withTimestamps();
     }
 

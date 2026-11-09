@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $region_id
  * @property bool $available
  * @property int $price_cents
+ * @property int $one_time_price_cents
  * @property PricingModel|string $pricing_model
  */
 class ProductAvailability extends Model
@@ -30,6 +31,7 @@ class ProductAvailability extends Model
         'region_id',
         'available',
         'price_cents',
+        'one_time_price_cents',
         'pricing_model',
     ];
 
@@ -38,6 +40,7 @@ class ProductAvailability extends Model
         return [
             'available' => 'boolean',
             'price_cents' => 'integer',
+            'one_time_price_cents' => 'integer',
             'pricing_model' => PricingModel::class,
         ];
     }
@@ -58,5 +61,13 @@ class ProductAvailability extends Model
     public function getPriceEurosAttribute(): float
     {
         return $this->price_cents / 100;
+    }
+
+    /**
+     * Accesor para obtener el cargo único en euros decimal.
+     */
+    public function getOneTimePriceEurosAttribute(): float
+    {
+        return $this->one_time_price_cents / 100;
     }
 }

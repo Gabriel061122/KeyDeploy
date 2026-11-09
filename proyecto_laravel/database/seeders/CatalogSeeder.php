@@ -332,6 +332,7 @@ class CatalogSeeder extends Seeder
                         [
                             'available' => $avail['available'],
                             'price_cents' => $avail['price_cents'],
+                            'one_time_price_cents' => 0,
                             'pricing_model' => $avail['pricing_model'],
                         ],
                     );

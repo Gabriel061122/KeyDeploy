@@ -22,6 +22,7 @@ class ProductAvailabilityFactory extends Factory
             'region_id' => Region::factory(),
             'available' => true,
             'price_cents' => fake()->numberBetween(500, 25000),
+            'one_time_price_cents' => 0,
             'pricing_model' => fake()->randomElement(PricingModel::cases()),
         ];
     }

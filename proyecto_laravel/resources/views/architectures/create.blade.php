@@ -81,7 +81,8 @@
                 </div>
             </div>
             <label for="config_{{ $i }}">Configuración JSON individual</label>
-            <textarea id="config_{{ $i }}" name="items[{{ $i }}][config]" placeholder='{"vcpu": 2, "ram_gb": 4}'>{{ $rowState[$i]['config'] }}</textarea>
+            <textarea id="config_{{ $i }}" name="items[{{ $i }}][config]" placeholder='{"vcpu": 2, "ram_gb": 4, "hours_per_month": 40, "gb_per_month": 150}'>{{ $rowState[$i]['config'] }}</textarea>
+            <p class="muted">Incluye <code class="inline">hours_per_month</code> para tarifas por hora y <code class="inline">gb_per_month</code> para tarifas por GB. Deben ser números no negativos con hasta dos decimales.</p>
             @error('items.'.$i.'.config') <p class="field-error">{{ $message }}</p> @enderror
         </fieldset>
     @endfor

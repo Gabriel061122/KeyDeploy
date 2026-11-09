@@ -66,6 +66,7 @@ class CatalogDemoSeeder extends Seeder
                     'provider_id' => $row[4]->id,
                     'available' => true,
                     'price_cents' => $row[6],
+                    'one_time_price_cents' => 0,
                     'pricing_model' => $row[5],
                 ]];
             })->all();

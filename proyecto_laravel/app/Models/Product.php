@@ -94,7 +94,7 @@ class Product extends Model
     public function regions(): BelongsToMany
     {
         return $this->belongsToMany(Region::class, 'product_availabilities')
-            ->withPivot('provider_id', 'available', 'price_cents', 'pricing_model')
+            ->withPivot('provider_id', 'available', 'price_cents', 'one_time_price_cents', 'pricing_model')
             ->withTimestamps();
     }
 
@@ -136,6 +136,20 @@ class Product extends Model
         $cents = $this->priceCentsInRegion($region);
 
         return $cents !== null ? ($cents / 100) : null;
+    }
+
+    /**
+     * Obtiene el cargo único en céntimos para una región dada.
+     */
+    public function oneTimePriceCentsInRegion(Region|int $region): int
+    {
+        $regionId = $region instanceof Region ? $region->id : (int) $region;
+
+        $availability = $this->relationLoaded('availabilities')
+            ? $this->availabilities->firstWhere('region_id', $regionId)
+            : $this->availabilities()->where('region_id', $regionId)->first();
+
+        return $availability?->one_time_price_cents ?? 0;
     }
 
     /**

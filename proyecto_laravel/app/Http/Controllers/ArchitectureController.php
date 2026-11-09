@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\PricingException;
 use App\Http\Requests\StoreArchitectureRequest;
 use App\Models\Architecture;
 use App\Models\ArchitectureItem;
 use App\Models\Product;
 use App\Models\Project;
 use App\Models\Region;
+use App\Services\ArchitecturePricingService;
 use App\Services\ArchitectureValidator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,7 +29,10 @@ class ArchitectureController extends Controller
 {
     public const DRAFT_KEY = 'architecture_draft';
 
-    public function __construct(public ArchitectureValidator $architectureValidator) {}
+    public function __construct(
+        public ArchitectureValidator $architectureValidator,
+        public ArchitecturePricingService $pricingService,
+    ) {}
 
     /**
      * Formulario de alta: región, productos disponibles (filtrados por
@@ -153,11 +158,22 @@ class ArchitectureController extends Controller
             ->get()
             ->keyBy('id');
 
+        $pricing = null;
+        $pricingError = null;
+
+        try {
+            $pricing = $this->pricingService->calculate($region, $draft['items']);
+        } catch (PricingException $exception) {
+            $pricingError = $exception->getMessage();
+        }
+
         return view('architectures.preview', [
             'project' => $project,
             'draft' => $draft,
             'region' => $region,
             'products' => $products,
+            'pricing' => $pricing,
+            'pricingError' => $pricingError,
         ]);
     }
 
@@ -185,6 +201,14 @@ class ArchitectureController extends Controller
             return redirect()
                 ->route('projects.architectures.create', $project)
                 ->withErrors($result['errors']);
+        }
+
+        try {
+            $this->pricingService->calculate($region, $result['items']);
+        } catch (PricingException $exception) {
+            return redirect()
+                ->route('projects.architectures.create', $project)
+                ->withErrors(['items' => $exception->getMessage()]);
         }
 
         /** @var Architecture $architecture */
@@ -243,7 +267,20 @@ class ArchitectureController extends Controller
 
         $architecture->load(['region', 'items.product.provider', 'items.product.availabilities', 'project']);
 
-        return view('architectures.show', ['architecture' => $architecture]);
+        $pricing = null;
+        $pricingError = null;
+
+        try {
+            $pricing = $this->pricingService->calculateForArchitecture($architecture);
+        } catch (PricingException $exception) {
+            $pricingError = $exception->getMessage();
+        }
+
+        return view('architectures.show', [
+            'architecture' => $architecture,
+            'pricing' => $pricing,
+            'pricingError' => $pricingError,
+        ]);
     }
 
     /**
