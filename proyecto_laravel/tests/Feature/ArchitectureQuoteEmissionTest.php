@@ -66,6 +66,14 @@ class ArchitectureQuoteEmissionTest extends TestCase
 
         $this->emitQuoteFrom($owner, $architecture)->assertRedirect();
 
+        // Criterio 10: la ficha de la arquitectura tampoco muestra
+        // columna de configuración (el consumo está en «Consumo mensual»).
+        $ficha = $this->get(route('architectures.show', $architecture))->assertOk();
+        $this->assertFalse(
+            str_contains($ficha->getContent(), 'Configuración'),
+            'La ficha de arquitectura no debe mostrar columna de configuración.',
+        );
+
         $quote = $this->lastQuote();
 
         // Cabecera congelada: proyecto, propietario, fecha de emisión y subtotales.
@@ -161,6 +169,17 @@ class ArchitectureQuoteEmissionTest extends TestCase
         $detail->assertSee('Servidor del detalle')
             ->assertSee('Disco del detalle')
             ->assertSee('Switch del detalle');
+
+        // Criterio 10: el presupuesto ya no muestra la configuración
+        // interna de las líneas (columna/fragmento JSON de configuración).
+        $this->assertFalse(
+            str_contains($detail->getContent(), 'Configuración'),
+            'El presupuesto no debe mostrar columna de configuración.',
+        );
+        $this->assertFalse(
+            str_contains($detail->getContent(), '<pre class="config"'),
+            'El presupuesto no debe volcar la configuración como JSON.',
+        );
     }
 
     /**

@@ -6,14 +6,17 @@ use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\Concerns\CreatesCatalogData;
 use Tests\TestCase;
 
 /**
- * Formulario dinámico de requerimientos SIN JavaScript (RF03): la
- * recarga de la página con un GET tradicional (`?data_type=...`)
- * reordena operadores y campo de valor, conserva lo tecleado y el
- * servidor revalida la combinación completa.
+ * Formulario dinámico de requerimientos SIN JavaScript (RF03), contrato
+ * de formulario único: el envío principal (POST alta / PUT edición)
+ * incluye SIEMPRE el campo `data_type`; el botón «Actualizar» usa
+ * `formaction` a las rutas de recarga (`projects.requirements.refresh`
+ * y `projects.requirements.refresh.edit`) con `formnovalidate`, y la
+ * recarga devuelve al formulario con la entrada antigua sin guardar.
  */
 class RequirementDynamicFormTest extends TestCase
 {
@@ -28,25 +31,65 @@ class RequirementDynamicFormTest extends TestCase
     }
 
     /**
-     * Creación del formulario sin datos: primer tipo (cadena),
-     * operadores compatibles con cadenas y campo de valor de texto.
+     * Criterio 13: el formulario de alta es ÚNICO (POST) e incluye el
+     * tipo de dato (`data_type`) en el propio envío; «Actualizar»
+     * recarga por POST a la ruta de recarga con `formnovalidate`.
      */
-    public function test_create_page_defaults_to_string_type_with_text_input(): void
+    public function test_create_form_is_single_and_includes_data_type(): void
     {
         $user = User::factory()->create();
         $project = $this->projectFor($user);
 
-        $this->actingAs($user)
+        $html = $this->actingAs($user)
             ->get(route('projects.requirements.create', ['project' => $project]))
             ->assertOk()
-            ->assertSee('value="string" selected', false)
-            ->assertSee('value="contains"', false) // operador de cadena
-            ->assertSee('type="text" name="value"', false);
+            ->getContent();
+
+        // El formulario principal (POST hacia el alta) contiene el
+        // campo data_type: elegir el tipo nunca depende de otro envío.
+        $this->assertMatchesRegularExpression(
+            '/<form\b[^>]*action=["\']'.preg_quote(route('projects.requirements.store', $project), '/').'["\'][^>]*>(?:(?!<\/form>).)*name="data_type"/s',
+            $html,
+            'El formulario principal de alta debe incluir el campo data_type.',
+        );
+
+        // Botón «Actualizar»: recarga POST independiente, sin
+        // validación, con la entrada antigua.
+        $this->assertMatchesRegularExpression(
+            '/<button\b[^>]*formaction=["\']'.preg_quote(route('projects.requirements.refresh', $project), '/').'["\']/i',
+            $html,
+        );
+        $this->assertMatchesRegularExpression('/formnovalidate/i', $html);
     }
 
     /**
-     * "Actualizar" con tipo entero recarga los operadores compatibles y
-     * el campo de valor numérico: los operadores de cadenas desaparecen.
+     * Criterio 14, permisos intactos: la recarga del tipo exige el
+     * propietario del proyecto en alta y en edición; nada se guarda.
+     */
+    public function test_refresh_routes_are_owner_only(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->projectFor($user);
+        $requirement = Requirement::factory()->create(['project_id' => $project->id]);
+
+        $this->actingAs($this->anotherCliente())
+            ->post(route('projects.requirements.refresh', $project), ['data_type' => 'integer'])
+            ->assertForbidden();
+
+        $this->actingAs($this->anotherCliente())
+            ->put(route('projects.requirements.refresh.edit', [$project, $requirement]), ['data_type' => 'string'])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('requirements', [
+            'id' => $requirement->id,
+            'field_key' => $requirement->field_key,
+        ]);
+    }
+
+    /**
+     * Criterio 13: «Actualizar» con tipo entero recarga los operadores
+     * compatibles y el campo de valor numérico; los operadores de
+     * cadenas desaparecen. La recarga no guarda nada.
      */
     public function test_update_button_reloads_compatible_operators_for_integer_type(): void
     {
@@ -54,87 +97,96 @@ class RequirementDynamicFormTest extends TestCase
         $project = $this->projectFor($user);
 
         $this->actingAs($user)
-            ->get(route('projects.requirements.create', ['project' => $project, 'data_type' => 'integer']))
+            ->post(route('projects.requirements.refresh', $project), [
+                'data_type' => 'integer',
+                'field_key' => 'usuarios_simultaneos',
+                'operator' => 'gte',
+                'value' => '25',
+            ])
+            ->assertRedirect(route('projects.requirements.create', $project));
+
+        $this->get(route('projects.requirements.create', $project))
             ->assertOk()
             ->assertSee('value="integer" selected', false)
             ->assertSee('value="gte"', false)
             ->assertDontSee('value="contains"', false)
             ->assertDontSee('value="not_contains"', false)
             ->assertSee('type="number" name="value" step="1"', false);
+
+        $this->assertDatabaseCount('requirements', 0);
     }
 
     /**
-     * El tipo decimal usa un input numérico con decimales permitidos;
-     * el tipo booleano cambia a un selector Verdadero/Falso.
+     * Criterio 13: el tipo decimal usa un input numérico con decimales
+     * permitidos; el tipo booleano cambia a un selector Verdadero/Falso.
+     * La adaptación ocurre con la recarga por la ruta de recarga.
      */
     public function test_value_field_adapts_to_decimal_and_boolean_types(): void
     {
         $user = User::factory()->create();
         $project = $this->projectFor($user);
 
-        $this->actingAs($user)
-            ->get(route('projects.requirements.create', ['project' => $project, 'data_type' => 'decimal']))
+        $this->postTypeAndReload($user, $project, 'decimal')
             ->assertOk()
             ->assertSee('value="decimal" selected', false)
             ->assertSee('type="number" name="value" step="any"', false);
 
-        $this->get(route('projects.requirements.create', ['project' => $project, 'data_type' => 'boolean']))
+        $this->postTypeAndReload($user, $project, 'boolean')
             ->assertOk()
             ->assertSee('<option value="1">Verdadero</option>', false)
             ->assertSee('<option value="0">Falso</option>', false)
             ->assertDontSee('type="number" name="value"', false)
             ->assertDontSee('type="text" name="value"', false);
+
+        $this->assertDatabaseCount('requirements', 0);
     }
 
     /**
-     * Durante la recarga de tipo se conserva lo ya tecleado mediante
-     * campos ocultos (sin JavaScript).
+     * Criterio 13: la recarga del tipo conserva lo ya tecleado (campo,
+     * operador, valor y obligatoriedad) sin guardar.
      */
-    public function test_type_reload_preserves_typed_data_in_hidden_fields(): void
+    public function test_type_reload_conserves_the_typed_data(): void
     {
         $user = User::factory()->create();
         $project = $this->projectFor($user);
 
         $this->actingAs($user)
-            ->get(route('projects.requirements.create', [
-                'project' => $project,
+            ->post(route('projects.requirements.refresh', $project), [
                 'data_type' => 'integer',
+                'field_key' => 'nucleos_cpu',
                 'operator' => 'gte',
                 'value' => '25',
-                'field_key' => 'nucleos_cpu',
                 'mandatory' => '1',
-            ]))
+            ])
+            ->assertRedirect(route('projects.requirements.create', $project));
+
+        $this->get(route('projects.requirements.create', $project))
             ->assertOk()
-            ->assertSee('<input type="hidden" name="field_key" value="nucleos_cpu">', false)
-            ->assertSee('<input type="hidden" name="operator" value="gte">', false)
-            ->assertSee('<input type="hidden" name="value" value="25">', false)
-            ->assertSee('<input type="hidden" name="mandatory" value="1">', false)
-            // y el formulario principal se rellena con lo conservado:
             ->assertSee('name="field_key" value="nucleos_cpu"', false)
             ->assertSee('type="number" name="value" step="1" value="25"', false)
             ->assertSee('value="gte" selected', false)
             ->assertSee('name="mandatory" value="1" checked', false);
+
+        $this->assertDatabaseCount('requirements', 0);
     }
 
     /**
-     * Un enlace manipulado con una combinación incompatible (booleano +
-     * mayor que) se corrige al recargar: el operador se descarta.
+     * Una combinación incompatible enviada a la recarga (booleano +
+     * mayor que) se corrige al recargar: el operador se descarta y el
+     * campo de valor se adapta al nuevo tipo.
      */
-    public function test_incompatible_operator_from_a_tampered_link_is_reset(): void
+    public function test_incompatible_operator_after_a_type_change_is_reset_by_the_reload(): void
     {
         $user = User::factory()->create();
         $project = $this->projectFor($user);
 
-        $this->actingAs($user)
-            ->get(route('projects.requirements.create', [
-                'project' => $project,
-                'data_type' => 'boolean',
-                'operator' => 'gt', // incompatible con booleanos
-                'value' => '1',
-            ]))
+        $this->postTypeAndReload($user, $project, 'boolean', operator: 'gt', value: '1')
             ->assertOk()
             ->assertSee('— Elige un operador —', false) // operador descartado
-            ->assertDontSee('value="gt"', false);
+            ->assertDontSee('value="gt"', false)
+            ->assertSee('<option value="1">Verdadero</option>', false);
+
+        $this->assertDatabaseCount('requirements', 0);
     }
 
     /**
@@ -163,10 +215,11 @@ class RequirementDynamicFormTest extends TestCase
     }
 
     /**
-     * El formulario de edición se rellena con los datos del
-     * requerimiento existente.
+     * Criterio 13: el formulario de edición se rellena con los datos
+     * del requerimiento existente y tiene envío principal (PUT) con
+     * `data_type`; «Actualizar» usa formaction a la recarga de edición.
      */
-    public function test_edit_page_prefills_the_requirement_data(): void
+    public function test_edit_page_prefills_the_requirement_and_includes_data_type(): void
     {
         $user = User::factory()->create();
         $project = $this->projectFor($user);
@@ -179,8 +232,22 @@ class RequirementDynamicFormTest extends TestCase
             'mandatory' => true,
         ]);
 
-        $this->actingAs($user)
+        $html = $this->actingAs($user)
             ->get(route('projects.requirements.edit', ['project' => $project, 'requirement' => $requirement]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '/<form\b[^>]*action=["\']'.preg_quote(route('projects.requirements.update', [$project, $requirement]), '/').'["\'][^>]*>(?:(?!<\/form>).)*name="data_type"/s',
+            $html,
+            'El formulario principal de edición debe incluir el campo data_type.',
+        );
+        $this->assertMatchesRegularExpression(
+            '/<button\b[^>]*formaction=["\']'.preg_quote(route('projects.requirements.refresh.edit', [$project, $requirement]), '/').'["\']/i',
+            $html,
+        );
+
+        $this->get(route('projects.requirements.edit', ['project' => $project, 'requirement' => $requirement]))
             ->assertOk()
             ->assertSee('name="field_key" value="ancho_banda_mbps"', false)
             ->assertSee('value="integer" selected', false)
@@ -190,10 +257,53 @@ class RequirementDynamicFormTest extends TestCase
     }
 
     /**
-     * En edición, cambiar el tipo incompatible también descarta el
-     * operador guardado y recarga con el campo adaptado.
+     * Criterio 13: en edición, «Actualizar» recarga conservando campo,
+     * tipo, operador, valor y obligatoriedad (con entrada antigua) SIN
+     * guardar cambios en el requerimiento existente.
      */
-    public function test_edit_page_reloads_and_resets_operator_for_a_new_incompatible_type(): void
+    public function test_edit_type_reload_conserves_input_and_saves_nothing(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->projectFor($user);
+        $requirement = Requirement::factory()->create([
+            'project_id' => $project->id,
+            'field_key' => 'ancho_banda_mbps',
+            'operator' => 'gte',
+            'value' => '250',
+            'data_type' => 'integer',
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('projects.requirements.refresh.edit', [$project, $requirement]), [
+                'data_type' => 'string',
+                'field_key' => 'ancho_banda_mbps',
+                'operator' => 'contains',
+                'value' => 'fibra',
+            ])
+            ->assertRedirect(route('projects.requirements.edit', [$project, $requirement]));
+
+        // La recarga de edición NO guarda nada.
+        $this->assertDatabaseHas('requirements', [
+            'id' => $requirement->id,
+            'data_type' => 'integer',
+            'operator' => 'gte',
+            'value' => '250',
+        ]);
+        $this->assertDatabaseCount('requirements', 1);
+
+        $this->get(route('projects.requirements.edit', ['project' => $project, 'requirement' => $requirement]))
+            ->assertOk()
+            ->assertSee('value="string" selected', false)
+            ->assertSee('name="field_key" value="ancho_banda_mbps"', false)
+            ->assertSee('value="contains"', false)
+            ->assertSee('name="value" value="fibra"', false);
+    }
+
+    /**
+     * En edición, cambiar el tipo a uno incompatible descarta el
+     * operador guardado durante la recarga (sin dañar el registro).
+     */
+    public function test_edit_reload_resets_the_saved_operator_for_a_new_incompatible_type(): void
     {
         $user = User::factory()->create();
         $project = $this->projectFor($user);
@@ -205,34 +315,39 @@ class RequirementDynamicFormTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->get(route('projects.requirements.edit', [
-                'project' => $project,
-                'requirement' => $requirement,
+            ->put(route('projects.requirements.refresh.edit', [$project, $requirement]), [
                 'data_type' => 'string',
-            ]))
+            ])
+            ->assertRedirect(route('projects.requirements.edit', [$project, $requirement]));
+
+        $this->get(route('projects.requirements.edit', ['project' => $project, 'requirement' => $requirement]))
             ->assertOk()
             ->assertSee('value="string" selected', false)
             ->assertSee('— Elige un operador —', false) // "gte" ya no es válido
             ->assertDontSee('value="gte" selected', false)
-            ->assertSee('type="text" name="value" value="250"', false); // valor conservado
+            ->assertSee('name="value" value="250"', false); // valor conservado
+
+        $this->assertDatabaseHas('requirements', [
+            'id' => $requirement->id,
+            'data_type' => 'integer',
+            'operator' => 'gte',
+        ]);
     }
 
     /**
-     * Aunque un cliente adultere el HTML y envíe una combinación
-     * prohibida, el servidor la rechaza al guardar.
+     * Envía la recarga del tipo por su ruta (alta) y devuelve la carga
+     * del formulario de alta resultante.
      */
-    public function test_server_revalidates_the_browser_visible_combination_on_save(): void
+    private function postTypeAndReload(User $user, Project $project, string $dataType, string $operator = '', string $value = ''): TestResponse
     {
-        $user = User::factory()->create();
-        $project = $this->projectFor($user);
+        $this->actingAs($user)
+            ->post(route('projects.requirements.refresh', $project), array_filter([
+                'data_type' => $dataType,
+                'field_key' => 'campo_recargado',
+                'operator' => $operator,
+                'value' => $value,
+            ], fn ($v) => $v !== '' && $v !== null));
 
-        $this->actingAs($user)->post(route('projects.requirements.store', $project), [
-            'field_key' => 'texto',
-            'operator' => 'gte', // prohibido para cadenas
-            'value' => 'PostgreSQL',
-            'data_type' => 'string',
-        ])->assertSessionHasErrors(['operator']);
-
-        $this->assertDatabaseCount('requirements', 0);
+        return $this->get(route('projects.requirements.create', $project));
     }
 }
