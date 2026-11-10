@@ -60,9 +60,9 @@ class ArchitectureBusinessRulesTest extends TestCase
         $project = $this->projectFor($user, $projectRegion);
 
         $items = [
-            ['product_id' => $this->productWithTariff($projectRegion, 'Servidor global', 'computacion', 900, extraRegions: [$otherRegion])->id, 'quantity' => 1, 'config' => '{}'],
-            ['product_id' => $this->productWithTariff($projectRegion, 'Disco global', 'almacenamiento', 500, extraRegions: [$otherRegion])->id, 'quantity' => 2, 'config' => '{}'],
-            ['product_id' => $this->productWithTariff($projectRegion, 'Firewall global', 'redes', 300, extraRegions: [$otherRegion])->id, 'quantity' => 1, 'config' => '{}'],
+            ['product_id' => $this->productWithTariff($projectRegion, 'Servidor global', 'computacion', 900, extraRegions: [$otherRegion])->id, 'quantity' => 1],
+            ['product_id' => $this->productWithTariff($projectRegion, 'Disco global', 'almacenamiento', 500, extraRegions: [$otherRegion])->id, 'quantity' => 2],
+            ['product_id' => $this->productWithTariff($projectRegion, 'Firewall global', 'redes', 300, extraRegions: [$otherRegion])->id, 'quantity' => 1],
         ];
 
         $errors = $this->postReview($project, $items, $user, regionId: $otherRegion->id);
@@ -87,41 +87,44 @@ class ArchitectureBusinessRulesTest extends TestCase
     public function test_requirement_operator_matrix_enforced_at_review(): void
     {
         $cases = [
-            // [descripción, data_type, operador, valor, campo, configuración, ¿bloquea?]
-            ['gte 10 vs 9: orden numérico, no lexicográfico', 'integer', 'gte', '9', 'nucleos', '{"nucleos": "10"}', false],
-            ['gte 8 vs 8: borde inclusivo', 'integer', 'gte', '8', 'nucleos', '{"nucleos": "8"}', false],
-            ['gte 9 vs 8: incumplido', 'integer', 'gte', '9', 'nucleos', '{"nucleos": "8"}', true],
-            ['eq 10 vs "010": igualdad numérica', 'integer', 'eq', '10', 'nucleos', '{"nucleos": "010"}', false],
-            ['eq 10 vs 11 con número JSON', 'integer', 'eq', '10', 'nucleos', '{"nucleos": 11}', true],
-            ['neq 10 vs 11: diferente numérico', 'integer', 'neq', '10', 'nucleos', '{"nucleos": "11"}', false],
-            ['neq 10 vs 10: igualdad bloquea', 'integer', 'neq', '10', 'nucleos', '{"nucleos": 10}', true],
-            ['gt 9 vs "10": orden numérico', 'integer', 'gt', '9', 'nucleos', '{"nucleos": "10"}', false],
-            ['lt 100 vs 99', 'integer', 'lt', '100', 'nucleos', '{"nucleos": 99}', false],
-            ['decimal gt 3.5 vs 3.75', 'decimal', 'gt', '3.5', 'memoria', '{"memoria": "3.75"}', false],
-            ['decimal gt 3.5 vs 3.49: incumplido', 'decimal', 'gt', '3.5', 'memoria', '{"memoria": "3.49"}', true],
-            ['decimal lte 16.5 vs 16.5: borde inclusivo', 'decimal', 'lte', '16.5', 'memoria', '{"memoria": "16.5"}', false],
-            ['decimal neq 3.5 vs 3.75', 'decimal', 'neq', '3.5', 'memoria', '{"memoria": "3.75"}', false],
-            ['string eq exacto', 'string', 'eq', 'Linux', 'so', '{"so": "Linux"}', false],
-            ['string eq sensible a mayúsculas', 'string', 'eq', 'Linux', 'so', '{"so": "linux"}', true],
-            ['string neq sensible a mayúsculas', 'string', 'neq', 'Linux', 'so', '{"so": "linux"}', false],
-            ['string neq igualdad bloquea', 'string', 'neq', 'Linux', 'so', '{"so": "Linux"}', true],
-            ['string contains satisfecho', 'string', 'contains', '16', 'software', '{"software": "Postgres 16"}', false],
-            ['string contains incumplido', 'string', 'contains', 'ubuntu', 'software', '{"software": "Debian 12"}', true],
-            ['string not_contains satisfecho', 'string', 'not_contains', 'oracle', 'software', '{"software": "Postgres 16"}', false],
-            ['string not_contains incumplido', 'string', 'not_contains', 'oracle', 'software', '{"software": "oracle 19c"}', true],
+            // [descripción, data_type, operador, valor, campo, atributos del catálogo, ¿bloquea?]
+            ['gte 10 vs 9: orden numérico, no lexicográfico', 'integer', 'gte', '9', 'nucleos', ['nucleos' => '10'], false],
+            ['gte 8 vs 8: borde inclusivo', 'integer', 'gte', '8', 'nucleos', ['nucleos' => '8'], false],
+            ['gte 9 vs 8: incumplido', 'integer', 'gte', '9', 'nucleos', ['nucleos' => '8'], true],
+            ['eq 10 vs "010": igualdad numérica', 'integer', 'eq', '10', 'nucleos', ['nucleos' => '010'], false],
+            ['eq 10 vs 11 con número JSON', 'integer', 'eq', '10', 'nucleos', ['nucleos' => 11], true],
+            ['neq 10 vs 11: diferente numérico', 'integer', 'neq', '10', 'nucleos', ['nucleos' => '11'], false],
+            ['neq 10 vs 10: igualdad bloquea', 'integer', 'neq', '10', 'nucleos', ['nucleos' => 10], true],
+            ['gt 9 vs "10": orden numérico', 'integer', 'gt', '9', 'nucleos', ['nucleos' => '10'], false],
+            ['lt 100 vs 99', 'integer', 'lt', '100', 'nucleos', ['nucleos' => 99], false],
+            ['decimal gt 3.5 vs 3.75', 'decimal', 'gt', '3.5', 'memoria', ['memoria' => '3.75'], false],
+            ['decimal gt 3.5 vs 3.49: incumplido', 'decimal', 'gt', '3.5', 'memoria', ['memoria' => '3.49'], true],
+            ['decimal lte 16.5 vs 16.5: borde inclusivo', 'decimal', 'lte', '16.5', 'memoria', ['memoria' => '16.5'], false],
+            ['decimal neq 3.5 vs 3.75', 'decimal', 'neq', '3.5', 'memoria', ['memoria' => '3.75'], false],
+            ['string eq exacto', 'string', 'eq', 'Linux', 'so', ['so' => 'Linux'], false],
+            ['string eq sensible a mayúsculas', 'string', 'eq', 'Linux', 'so', ['so' => 'linux'], true],
+            ['string neq sensible a mayúsculas', 'string', 'neq', 'Linux', 'so', ['so' => 'linux'], false],
+            ['string neq igualdad bloquea', 'string', 'neq', 'Linux', 'so', ['so' => 'Linux'], true],
+            ['string contains satisfecho', 'string', 'contains', '16', 'software', ['software' => 'Postgres 16'], false],
+            ['string contains incumplido', 'string', 'contains', 'ubuntu', 'software', ['software' => 'Debian 12'], true],
+            ['string not_contains satisfecho', 'string', 'not_contains', 'oracle', 'software', ['software' => 'Postgres 16'], false],
+            ['string not_contains incumplido', 'string', 'not_contains', 'oracle', 'software', ['software' => 'oracle 19c'], true],
         ];
 
-        foreach ($cases as $index => [$case, $dataType, $operator, $value, $field, $config, $mustBlock]) {
+        foreach ($cases as $index => [$case, $dataType, $operator, $value, $field, $attributes, $mustBlock]) {
             $user = User::factory()->create();
             $region = $this->regionFor('req-'.$index);
             $project = $this->projectFor($user, $region);
 
             $this->requirementFor($project, $field, $operator, $value, $dataType, mandatory: true);
 
+            // El requisito obligatorio se comprueba contra los ATRIBUTOS
+            // del catálogo (products.config) de los productos
+            // seleccionados, nunca contra JSON del navegador.
             $items = [
-                ['product_id' => $this->productWithTariff($region, 'Disco evaluado', 'almacenamiento', 500)->id, 'quantity' => 1, 'config' => $config],
-                ['product_id' => $this->productWithTariff($region, 'Servidor de relleno', 'computacion', 400)->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $this->productWithTariff($region, 'Firewall de relleno', 'redes', 300)->id, 'quantity' => 1, 'config' => '{}'],
+                ['product_id' => $this->productWithTariff($region, 'Disco evaluado', 'almacenamiento', 500, attributes: $attributes)->id, 'quantity' => 1],
+                ['product_id' => $this->productWithTariff($region, 'Servidor de relleno', 'computacion', 400)->id, 'quantity' => 2],
+                ['product_id' => $this->productWithTariff($region, 'Firewall de relleno', 'redes', 300)->id, 'quantity' => 1],
             ];
             $architecturesBefore = Architecture::query()->count();
             $itemsBefore = ArchitectureItem::query()->count();
@@ -139,19 +142,18 @@ class ArchitectureBusinessRulesTest extends TestCase
             $this->get(route('projects.architectures.check', $project))->assertOk();
             $this->post(route('projects.architectures.store', $project));
 
-            $architecture = Architecture::query()->latest('id')->firstOrFail();
-            $storedConfig = $architecture->items()->firstOrFail()->config;
-            $this->assertArrayHasKey(
-                $field,
-                $storedConfig,
-                'Caso "'.$case.'": el valor evaluado debe guardarse con el elemento.',
+            $this->assertSame(
+                $architecturesBefore + 1,
+                Architecture::query()->count(),
+                'Caso "'.$case.'": la revisión satisfecha debe permitir guardar.',
             );
         }
     }
 
     /**
-     * Contrato 5.1: un requisito obligatorio sin ninguna clave de primer
-     * nivel coincidente en la configuración bloquea.
+     * Contrato 2.2: un requisito obligatorio sin ningún producto
+     * seleccionado que declare la clave en sus atributos del catálogo
+     * (products.config) bloquea.
      */
     public function test_mandatory_requirement_without_any_matching_key_blocks_review(): void
     {
@@ -162,9 +164,9 @@ class ArchitectureBusinessRulesTest extends TestCase
         $this->requirementFor($project, 'nucleos', 'gte', '8', 'integer', mandatory: true);
 
         $errors = $this->postReview($project, [
-            ['product_id' => $this->productWithTariff($region, 'Disco vacío', 'almacenamiento', 500)->id, 'quantity' => 1, 'config' => '{}'],
-            ['product_id' => $this->productWithTariff($region, 'Servidor vacío', 'computacion', 400)->id, 'quantity' => 2, 'config' => '{}'],
-            ['product_id' => $this->productWithTariff($region, 'Firewall vacío', 'redes', 300)->id, 'quantity' => 1, 'config' => '{}'],
+            ['product_id' => $this->productWithTariff($region, 'Disco vacío', 'almacenamiento', 500)->id, 'quantity' => 1],
+            ['product_id' => $this->productWithTariff($region, 'Servidor vacío', 'computacion', 400)->id, 'quantity' => 2],
+            ['product_id' => $this->productWithTariff($region, 'Firewall vacío', 'redes', 300)->id, 'quantity' => 1],
         ], $user);
 
         $this->assertMessagesMention($errors, ['nucleos'], mode: 'all', context: 'sin-clave');
@@ -172,17 +174,18 @@ class ArchitectureBusinessRulesTest extends TestCase
     }
 
     /**
-     * Contrato 5.1: los booleanos se normalizan con las convenciones
+     * Contrato 2.2: los booleanos se normalizan con las convenciones
      * existentes de RequirementRules ('0'/'1', true/false, 'verdadero',
-     * 'no', …) en la comparación con la configuración. El valor del
-     * requisito está ya normalizado por el formulario (aquí '1' y '0',
-     * tal como lo escribiría el flujo real); la configuración llega al
-     * evaluador tal cual el navegador.
+     * 'no', …) al comparar los ATRIBUTOS del catálogo
+     * (products.config) con el requisito. Los valores del requisito
+     * están ya normalizados por el formulario ('1' y '0');
+     * los valores de los atributos del catálogo llegan al evaluador tal
+     * y como los sembró el proveedor (JSON: true/false, '1', 'no', …).
      */
     public function test_boolean_comparison_uses_existing_normalization_conventions(): void
     {
         $cases = [
-            // [configuración (JSON crudo), operador, requerido, ¿satisface?]
+            // [atributo del catálogo (products.config), operador, requerido, ¿satisface?]
             ['{"europeo": true}', 'eq', '1', true],
             ['{"europeo": "verdadero"}', 'eq', '1', true],
             ['{"europeo": 1}', 'eq', '1', true],
@@ -193,7 +196,7 @@ class ArchitectureBusinessRulesTest extends TestCase
             ['{"europeo": "verdadero"}', 'neq', '1', false],
         ];
 
-        foreach ($cases as $index => [$config, $operator, $requiredValue, $satisfies]) {
+        foreach ($cases as $index => [$attributesJson, $operator, $requiredValue, $satisfies]) {
             $user = User::factory()->create();
             $region = $this->regionFor('bool-'.$index);
             $project = $this->projectFor($user, $region);
@@ -201,17 +204,17 @@ class ArchitectureBusinessRulesTest extends TestCase
             $this->requirementFor($project, 'europeo', $operator, $requiredValue, 'boolean', mandatory: true);
 
             $items = [
-                ['product_id' => $this->productWithTariff($region, 'Disco bool', 'almacenamiento', 500)->id, 'quantity' => 1, 'config' => $config],
-                ['product_id' => $this->productWithTariff($region, 'Servidor bool', 'computacion', 400)->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $this->productWithTariff($region, 'Firewall bool', 'redes', 300)->id, 'quantity' => 1, 'config' => '{}'],
+                ['product_id' => $this->productWithTariff($region, 'Disco bool', 'almacenamiento', 500, attributes: (array) json_decode($attributesJson, true))->id, 'quantity' => 1],
+                ['product_id' => $this->productWithTariff($region, 'Servidor bool', 'computacion', 400)->id, 'quantity' => 2],
+                ['product_id' => $this->productWithTariff($region, 'Firewall bool', 'redes', 300)->id, 'quantity' => 1],
             ];
 
             if ($satisfies) {
-                $this->reviewOk($project, $items, $user, context: 'bool '.$config);
+                $this->reviewOk($project, $items, $user, context: 'bool '.$attributesJson);
                 $this->get(route('projects.architectures.check', $project))->assertOk();
             } else {
-                $errors = $this->postReview($project, $items, $user, context: 'bool '.$config);
-                $this->assertMessagesMention($errors, ['europeo'], mode: 'all', context: 'bool '.$config);
+                $errors = $this->postReview($project, $items, $user, context: 'bool '.$attributesJson);
+                $this->assertMessagesMention($errors, ['europeo'], mode: 'all', context: 'bool '.$attributesJson);
                 $this->assertNothingPersisted();
             }
         }
@@ -230,10 +233,12 @@ class ArchitectureBusinessRulesTest extends TestCase
 
         $this->requirementFor($project, 'nucleos', 'gte', '8', 'integer', mandatory: true);
 
+        // Con atributos del catálogo basta con que AL MENOS UN producto
+        // seleccionado declare la clave con un valor que cumpla.
         $items = [
-            ['product_id' => $this->productWithTariff($region, 'Disco pequeño', 'almacenamiento', 500)->id, 'quantity' => 1, 'config' => '{"nucleos": "4"}'],
-            ['product_id' => $this->productWithTariff($region, 'Servidor grande', 'computacion', 400)->id, 'quantity' => 1, 'config' => '{"nucleos": "16"}'],
-            ['product_id' => $this->productWithTariff($region, 'Firewall sin datos', 'redes', 300)->id, 'quantity' => 1, 'config' => '{}'],
+            ['product_id' => $this->productWithTariff($region, 'Disco pequeño', 'almacenamiento', 500, attributes: ['nucleos' => '4'])->id, 'quantity' => 1],
+            ['product_id' => $this->productWithTariff($region, 'Servidor grande', 'computacion', 400, attributes: ['nucleos' => '16'])->id, 'quantity' => 1],
+            ['product_id' => $this->productWithTariff($region, 'Firewall sin datos', 'redes', 300)->id, 'quantity' => 1],
         ];
 
         $this->reviewOk($project, $items, $user);
@@ -257,9 +262,9 @@ class ArchitectureBusinessRulesTest extends TestCase
         $this->requirementFor($project, 'nucleos', 'gte', '8', 'integer', mandatory: true);
 
         $errors = $this->postReview($project, [
-            ['product_id' => $this->productWithTariff($region, 'Disco cuatro', 'almacenamiento', 500)->id, 'quantity' => 1, 'config' => '{"nucleos": "4"}'],
-            ['product_id' => $this->productWithTariff($region, 'Servidor seis', 'computacion', 400)->id, 'quantity' => 1, 'config' => '{"nucleos": "6"}'],
-            ['product_id' => $this->productWithTariff($region, 'Firewall sin datos', 'redes', 300)->id, 'quantity' => 1, 'config' => '{}'],
+            ['product_id' => $this->productWithTariff($region, 'Disco cuatro', 'almacenamiento', 500, attributes: ['nucleos' => '4'])->id, 'quantity' => 1],
+            ['product_id' => $this->productWithTariff($region, 'Servidor seis', 'computacion', 400, attributes: ['nucleos' => '6'])->id, 'quantity' => 1],
+            ['product_id' => $this->productWithTariff($region, 'Firewall sin datos', 'redes', 300)->id, 'quantity' => 1],
         ], $user);
 
         $this->assertMessagesMention($errors, ['nucleos'], mode: 'all', context: 'repetidas-ko');
@@ -281,9 +286,9 @@ class ArchitectureBusinessRulesTest extends TestCase
         $this->requirementFor($project, 'so', 'eq', 'Linux', 'string', mandatory: false);
 
         $items = [
-            ['product_id' => $this->productWithTariff($region, 'Disco opcional', 'almacenamiento', 500)->id, 'quantity' => 1, 'config' => '{"nucleos": "2"}'],
-            ['product_id' => $this->productWithTariff($region, 'Servidor opcional', 'computacion', 400)->id, 'quantity' => 2, 'config' => '{"so": "windows"}'],
-            ['product_id' => $this->productWithTariff($region, 'Firewall opcional', 'redes', 300)->id, 'quantity' => 1, 'config' => '{}'],
+            ['product_id' => $this->productWithTariff($region, 'Disco opcional', 'almacenamiento', 500, attributes: ['nucleos' => '2'])->id, 'quantity' => 1],
+            ['product_id' => $this->productWithTariff($region, 'Servidor opcional', 'computacion', 400, attributes: ['so' => 'windows'])->id, 'quantity' => 2],
+            ['product_id' => $this->productWithTariff($region, 'Firewall opcional', 'redes', 300)->id, 'quantity' => 1],
         ];
 
         $this->reviewOk($project, $items, $user);
@@ -313,9 +318,9 @@ class ArchitectureBusinessRulesTest extends TestCase
         $network = $this->productWithTariff($region, 'Firewall barato', 'redes', 1);
 
         $items = [
-            ['product_id' => $server->id, 'quantity' => 2, 'config' => '{}'],
-            ['product_id' => $disk->id, 'quantity' => 1, 'config' => '{}'],
-            ['product_id' => $network->id, 'quantity' => 1, 'config' => '{}'],
+            ['product_id' => $server->id, 'quantity' => 2],
+            ['product_id' => $disk->id, 'quantity' => 1],
+            ['product_id' => $network->id, 'quantity' => 1],
         ];
 
         $this->reviewOk($project, $items, $user);
@@ -350,9 +355,9 @@ class ArchitectureBusinessRulesTest extends TestCase
         $network = $this->productWithTariff($region, 'Firewall con instalación', 'redes', 1);
 
         $items = [
-            ['product_id' => $server->id, 'quantity' => 2, 'config' => '{}'],
-            ['product_id' => $disk->id, 'quantity' => 1, 'config' => '{}'],
-            ['product_id' => $network->id, 'quantity' => 1, 'config' => '{}'],
+            ['product_id' => $server->id, 'quantity' => 2],
+            ['product_id' => $disk->id, 'quantity' => 1],
+            ['product_id' => $network->id, 'quantity' => 1],
         ];
 
         $this->reviewOk($project, $items, $user);
@@ -385,9 +390,9 @@ class ArchitectureBusinessRulesTest extends TestCase
         $network = $this->productWithTariff($region, 'Firewall sobre presupuesto', 'redes', 1);
 
         $items = [
-            ['product_id' => $server->id, 'quantity' => 2, 'config' => '{}'],
-            ['product_id' => $disk->id, 'quantity' => 1, 'config' => '{}'],
-            ['product_id' => $network->id, 'quantity' => 1, 'config' => '{}'],
+            ['product_id' => $server->id, 'quantity' => 2],
+            ['product_id' => $disk->id, 'quantity' => 1],
+            ['product_id' => $network->id, 'quantity' => 1],
         ];
 
         $this->reviewOk($project, $items, $user);
@@ -415,9 +420,9 @@ class ArchitectureBusinessRulesTest extends TestCase
         $network = $this->productWithTariff($region, 'Firewall conservado', 'redes', 300);
 
         $items = [
-            ['product_id' => $server->id, 'quantity' => 1, 'config' => '{}'],
-            ['product_id' => $disk->id, 'quantity' => 1, 'config' => '{}'],
-            ['product_id' => $network->id, 'quantity' => 1, 'config' => '{}'],
+            ['product_id' => $server->id, 'quantity' => 1],
+            ['product_id' => $disk->id, 'quantity' => 1],
+            ['product_id' => $network->id, 'quantity' => 1],
         ];
 
         $this->reviewOk($project, $items, $user);
@@ -449,9 +454,9 @@ class ArchitectureBusinessRulesTest extends TestCase
         $network = $this->productWithTariff($region, 'Firewall con disponibilidad', 'redes', 300);
 
         $items = [
-            ['product_id' => $server->id, 'quantity' => 1, 'config' => '{}'],
-            ['product_id' => $disk->id, 'quantity' => 1, 'config' => '{}'],
-            ['product_id' => $network->id, 'quantity' => 1, 'config' => '{}'],
+            ['product_id' => $server->id, 'quantity' => 1],
+            ['product_id' => $disk->id, 'quantity' => 1],
+            ['product_id' => $network->id, 'quantity' => 1],
         ];
 
         $this->reviewOk($project, $items, $user);
@@ -479,9 +484,9 @@ class ArchitectureBusinessRulesTest extends TestCase
         $project = $this->projectFor($user, $region, maxBudget: '99.99');
 
         $items = [
-            ['product_id' => $this->productWithTariff($region, 'Servidor revalidado', 'computacion', 500)->id, 'quantity' => 1, 'config' => '{}'],
-            ['product_id' => $this->productWithTariff($region, 'Disco revalidado', 'almacenamiento', 400)->id, 'quantity' => 1, 'config' => '{}'],
-            ['product_id' => $this->productWithTariff($region, 'Firewall revalidado', 'redes', 300)->id, 'quantity' => 1, 'config' => '{}'],
+            ['product_id' => $this->productWithTariff($region, 'Servidor revalidado', 'computacion', 500)->id, 'quantity' => 1],
+            ['product_id' => $this->productWithTariff($region, 'Disco revalidado', 'almacenamiento', 400)->id, 'quantity' => 1],
+            ['product_id' => $this->productWithTariff($region, 'Firewall revalidado', 'redes', 300)->id, 'quantity' => 1],
         ];
 
         $this->reviewOk($project, $items, $user);
@@ -507,9 +512,9 @@ class ArchitectureBusinessRulesTest extends TestCase
         $project = $this->projectFor($user, $originalRegion, maxBudget: '99.99');
 
         $items = [
-            ['product_id' => $this->productWithTariff($originalRegion, 'Servidor revalidado', 'computacion', 500)->id, 'quantity' => 1, 'config' => '{}'],
-            ['product_id' => $this->productWithTariff($originalRegion, 'Disco revalidado', 'almacenamiento', 400)->id, 'quantity' => 1, 'config' => '{}'],
-            ['product_id' => $this->productWithTariff($originalRegion, 'Firewall revalidado', 'redes', 300)->id, 'quantity' => 1, 'config' => '{}'],
+            ['product_id' => $this->productWithTariff($originalRegion, 'Servidor revalidado', 'computacion', 500)->id, 'quantity' => 1],
+            ['product_id' => $this->productWithTariff($originalRegion, 'Disco revalidado', 'almacenamiento', 400)->id, 'quantity' => 1],
+            ['product_id' => $this->productWithTariff($originalRegion, 'Firewall revalidado', 'redes', 300)->id, 'quantity' => 1],
         ];
 
         $this->reviewOk($project, $items, $user);
@@ -536,7 +541,7 @@ class ArchitectureBusinessRulesTest extends TestCase
      * clave del error bag). Debuelve también el fallo del test si la
      * revisión no llega a bloquear.
      *
-     * @param  list<array{product_id: int, quantity: int, config: string}>  $items
+     * @param  list<array{product_id: int, quantity: int, usage?: string}>  $items
      * @return list<string>
      */
     private function postReview(Project $project, array $items, User $user, ?int $regionId = null, ?string $context = null): array
@@ -559,7 +564,7 @@ class ArchitectureBusinessRulesTest extends TestCase
      * Envía la revisión esperando el paso satisfactorio de las reglas:
      * sin errores de sesión y redirección a la comprobación.
      *
-     * @param  list<array{product_id: int, quantity: int, config: string}>  $items
+     * @param  list<array{product_id: int, quantity: int, usage?: string}>  $items
      */
     private function reviewOk(Project $project, array $items, User $user, ?int $regionId = null, ?string $context = null): void
     {
@@ -657,7 +662,7 @@ class ArchitectureBusinessRulesTest extends TestCase
     }
 
     /**
-     * @param  list<array{product_id: int, quantity: int, config: string}>  $items
+     * @param  list<array{product_id: int, quantity: int, usage?: string}>  $items
      */
     private function payload(Project $project, array $items, ?int $regionId = null): array
     {
@@ -698,6 +703,7 @@ class ArchitectureBusinessRulesTest extends TestCase
         ?int $oneTimeCents = null,
         bool $active = true,
         array $extraRegions = [],
+        array $attributes = [],
     ): Product {
         $suffix = substr(bin2hex(random_bytes(5)), 0, 6);
         $provider = Provider::query()->firstOrCreate(['name' => 'Proveedor de reglas']);
@@ -708,24 +714,24 @@ class ArchitectureBusinessRulesTest extends TestCase
             'type' => $type,
             'unit_price' => $priceCents / 100,
             'provider_id' => $provider->id,
-            'active' => $active,
-        ]);
+        ] + ($attributes !== [] ? ['config' => $attributes] : []));
 
-        $pivot = [
-            'provider_id' => $provider->id,
+        ProductAvailability::query()->create([
+            'product_id' => $product->id,
+            'region_id' => $region->id,
             'available' => true,
             'price_cents' => $priceCents,
             'pricing_model' => $pricingModel,
-        ];
-
-        if ($oneTimeCents !== null) {
-            $pivot['one_time_price_cents'] = $oneTimeCents;
-        }
-
-        $product->regions()->attach($region->id, $pivot);
+        ] + ($oneTimeCents !== null ? ['one_time_price_cents' => $oneTimeCents] : []));
 
         foreach ($extraRegions as $extraRegion) {
-            $product->regions()->attach($extraRegion->id, $pivot);
+            ProductAvailability::query()->create([
+                'product_id' => $product->id,
+                'region_id' => $extraRegion->id,
+                'available' => true,
+                'price_cents' => $priceCents,
+                'pricing_model' => $pricingModel,
+            ] + ($oneTimeCents !== null ? ['one_time_price_cents' => $oneTimeCents] : []));
         }
 
         return $product;

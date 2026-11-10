@@ -14,6 +14,7 @@ use Database\Seeders\CatalogSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use Tests\Concerns\InteractsWithArchitectureQuotes;
 use Tests\TestCase;
 
 /**
@@ -35,7 +36,7 @@ use Tests\TestCase;
  */
 class ArchitecturePricingTest extends TestCase
 {
-    use RefreshDatabase;
+    use InteractsWithArchitectureQuotes, RefreshDatabase;
 
     /**
      * Criterio 1: una tarifa fijo_mensual calcula exactamente
@@ -57,9 +58,9 @@ class ArchitecturePricingTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, [
-                ['product_id' => $compute->id, 'quantity' => 3, 'config' => '{}'],
-                ['product_id' => $storage->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $network->id, 'quantity' => 2, 'config' => '{}'],
+                ['product_id' => $compute->id, 'quantity' => 3],
+                ['product_id' => $storage->id, 'quantity' => 2],
+                ['product_id' => $network->id, 'quantity' => 2],
             ]))
             ->assertSessionHasNoErrors();
 
@@ -74,6 +75,10 @@ class ArchitecturePricingTest extends TestCase
         // Subtotal mensual (9330) y coste inicial (mensual + único: 0).
         $this->assertSeesAmount($check, 9330);
 
+        // Criterio 10: la previsualización ya no muestra columna de
+        // configuración (el consumo se muestra en «Consumo mensual»).
+        $this->assertDontSee('Configuración', $check);
+
         $response = $this->post(route('projects.architectures.store', $project));
         $architecture = Architecture::query()->firstOrFail();
         $response->assertRedirect(route('architectures.show', $architecture));
@@ -84,14 +89,54 @@ class ArchitecturePricingTest extends TestCase
         $this->assertSeesAmount($detail, 1980);
         $this->assertSeesAmount($detail, 3600);
         $this->assertSeesAmount($detail, 9330);
+        $this->assertDontSee('Configuración', $detail);
     }
 
     /**
-     * Criterio 2: una tarifa por_hora exige hours_per_month y el ejemplo
-     * se calcula exactamente (200 céntimos/hora × 7.5 horas × 4 = 6000
-     * céntimos = 60.00 €).
+     * Criterio 7: una tarifa fijo_mensual ignora el consumo mensual
+     * enviado por el navegador (no produce consumo interno, ni precio
+     * extra, ni error).
      */
-    public function test_por_hora_uses_hours_per_month_and_calculates_the_exact_example(): void
+    public function test_fijo_mensual_ignores_the_usage_sent_by_the_client(): void
+    {
+        $user = User::factory()->create();
+        $region = $this->regionFor('fijo-uso');
+        $project = $this->projectFor($user, $region);
+
+        // 1000 × 2 = 2000 céntimos; la tarifa fija cobra igual con o sin uso.
+        $compute = $this->productWithTariff($region, 'Servidor indiferente', 'computacion', 1000);
+        $storage = $this->productWithTariff($region, 'Disco indiferente', 'almacenamiento', 500);
+        $network = $this->productWithTariff($region, 'Firewall indiferente', 'redes', 300);
+
+        $this->actingAs($user)
+            ->post(route('projects.architectures.review', $project), $this->payload($project, [
+                ['product_id' => $compute->id, 'quantity' => 2, 'usage' => '12.75'],
+                ['product_id' => $storage->id, 'quantity' => 1, 'usage' => '0'],
+                ['product_id' => $network->id, 'quantity' => 1, 'usage' => '999999.99'],
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSeesAmount($this->get(route('projects.architectures.check', $project)), 2000);
+
+        $this->post(route('projects.architectures.store', $project));
+        $architecture = Architecture::query()->where('project_id', $project->id)->firstOrFail();
+
+        foreach ($architecture->items as $item) {
+            $this->assertSame(
+                [],
+                $item->config,
+                'Las tarifas fijas se guardan sin consumo interno.',
+            );
+        }
+    }
+
+    /**
+     * Criterio 5: el consumo mensual indicado por el formulario
+     * (`items[*][usage]`) exige la tarifa por_hora y el ejemplo se
+     * calcula exactamente (200 céntimos/hora × 7.5 horas × 4 = 6000
+     * céntimos = 60.00 €). El servidor construye el consumo interno.
+     */
+    public function test_por_hora_derives_hours_per_month_from_the_usage_field(): void
     {
         $user = User::factory()->create();
         $region = $this->regionFor('hora');
@@ -105,9 +150,9 @@ class ArchitecturePricingTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, [
-                ['product_id' => $lambda->id, 'quantity' => 4, 'config' => '{"hours_per_month": "7.5"}'],
-                ['product_id' => $compute->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $network->id, 'quantity' => 3, 'config' => '{}'],
+                ['product_id' => $lambda->id, 'quantity' => 4, 'usage' => '7.5'],
+                ['product_id' => $compute->id, 'quantity' => 2],
+                ['product_id' => $network->id, 'quantity' => 3],
             ]))
             ->assertSessionHasNoErrors();
 
@@ -130,9 +175,9 @@ class ArchitecturePricingTest extends TestCase
     }
 
     /**
-     * Criterio 3: una tarifa por_gb exige gb_per_month y el ejemplo se
-     * calcula exactamente (15 céntimos/GB × 120 GB × 2 = 3600 céntimos
-     * = 36.00 €).
+     * Criterio 6: el consumo mensual (`items[*][usage]`) sobre una
+     * tarifa por_gb se calcula exactamente (15 céntimos/GB × 120 GB × 2
+     * = 3600 céntimos = 36.00 €).
      */
     public function test_por_gb_uses_gb_per_month_and_calculates_the_exact_example(): void
     {
@@ -148,9 +193,9 @@ class ArchitecturePricingTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, [
-                ['product_id' => $transfer->id, 'quantity' => 2, 'config' => '{"gb_per_month": "120"}'],
-                ['product_id' => $compute->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $storage->id, 'quantity' => 3, 'config' => '{}'],
+                ['product_id' => $transfer->id, 'quantity' => 2, 'usage' => '120'],
+                ['product_id' => $compute->id, 'quantity' => 2],
+                ['product_id' => $storage->id, 'quantity' => 3],
             ]))
             ->assertSessionHasNoErrors();
 
@@ -172,35 +217,38 @@ class ArchitecturePricingTest extends TestCase
     }
 
     /**
-     * Criterio 2 y 3, caso límite: un consumo cero es válido por
-     * especificación y produce coste cero para esa línea, sin bloquear
-     * la revisión ni el cálculo del resto de elementos.
+     * Criterio 5, caso límite: el consumo obligatorio debe ser MAYOR
+     * que cero. Un `usage` de 0 para una tarifa por_hora equivale a no
+     * indicarlo: bloquea la revisión citando el elemento y la unidad, y
+     * no persiste nada.
      */
-    public function test_zero_consumption_is_valid_and_costs_nothing(): void
+    public function test_zero_usage_for_a_metered_tariff_is_rejected(): void
     {
         $user = User::factory()->create();
         $region = $this->regionFor('cero');
         $project = $this->projectFor($user, $region);
 
-        // 200 × 0 × 3 = 0 céntimos
-        $lambda = $this->productWithTariff($region, 'Lambda en hibernación', 'almacenamiento', 200, 'por_hora');
-        // Fijas de relleno: 111 × 2 = 222 y 500 × 1 = 500.
+        $lambda = $this->productWithTariff($region, 'Flota apagada', 'almacenamiento', 200, 'por_hora');
         $compute = $this->productWithTariff($region, 'Servidor fijo', 'computacion', 111, 'fijo_mensual');
         $network = $this->productWithTariff($region, 'Firewall fijo', 'redes', 500, 'fijo_mensual');
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, [
-                ['product_id' => $lambda->id, 'quantity' => 3, 'config' => '{"hours_per_month": "0"}'],
-                ['product_id' => $compute->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $network->id, 'quantity' => 1, 'config' => '{}'],
+                ['product_id' => $lambda->id, 'quantity' => 3, 'usage' => '0'],
+                ['product_id' => $compute->id, 'quantity' => 2],
+                ['product_id' => $network->id, 'quantity' => 1],
             ]))
-            ->assertSessionHasNoErrors();
+            ->assertSessionHasErrors();
 
-        $check = $this->get(route('projects.architectures.check', $project))->assertOk();
+        $this->assertMessagesMention(
+            $this->allSessionErrors(),
+            [$lambda->name, 'hora'],
+            mode: 'all',
+            context: 'consumo cero en por_hora',
+        );
 
-        // La línea de por_hora cuesta 0 y la fija siga pagándose: 222 + 500 = 722 céntimos.
-        $this->assertSeesAmount($check, 0);
-        $this->assertSeesAmount($check, 722);
+        $this->assertDatabaseCount('architectures', 0);
+        $this->assertDatabaseCount('architecture_items', 0);
     }
 
     /**
@@ -223,9 +271,9 @@ class ArchitecturePricingTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, [
-                ['product_id' => $compute->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $storage->id, 'quantity' => 3, 'config' => '{}'],
-                ['product_id' => $network->id, 'quantity' => 1, 'config' => '{}'],
+                ['product_id' => $compute->id, 'quantity' => 2],
+                ['product_id' => $storage->id, 'quantity' => 3],
+                ['product_id' => $network->id, 'quantity' => 1],
             ]))
             ->assertSessionHasNoErrors();
 
@@ -266,8 +314,8 @@ class ArchitecturePricingTest extends TestCase
     }
 
     /**
-     * Criterio 5: el consumo obligatorio ausente (por_hora sin
-     * hours_per_month) bloquea la revisión y no persiste nada.
+     * Criterio 5: el consumo obligatorio ausente (por_hora, sin el
+     * campo «Consumo mensual») bloquea la revisión y no persiste nada.
      */
     public function test_missing_hours_per_month_blocks_review_and_persists_nothing(): void
     {
@@ -275,25 +323,35 @@ class ArchitecturePricingTest extends TestCase
         $region = $this->regionFor('sin-horas');
         $project = $this->projectFor($user, $region);
 
-        $lambda = $this->productWithTariff($region, 'Lambda por hora', 'almacenamiento', 200, 'por_hora');
+        $lambda = $this->productWithTariff($region, 'Función elástica', 'almacenamiento', 200, 'por_hora');
         $compute = $this->productWithTariff($region, 'Servidor fijo', 'computacion', 850, 'fijo_mensual');
         $network = $this->productWithTariff($region, 'Firewall fijo', 'redes', 999, 'fijo_mensual');
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, [
-                ['product_id' => $lambda->id, 'quantity' => 4, 'config' => '{}'],
-                ['product_id' => $compute->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $network->id, 'quantity' => 3, 'config' => '{}'],
+                ['product_id' => $lambda->id, 'quantity' => 4],
+                ['product_id' => $compute->id, 'quantity' => 2],
+                ['product_id' => $network->id, 'quantity' => 3],
             ]))
-            ->assertSessionHasErrors(['items']);
+            ->assertSessionHasErrors();
+
+        // Criterio 5: el error identifica el elemento y la unidad
+        // (nombre del producto + «hora»), no un mensaje genérico.
+        $this->assertMessagesMention(
+            $this->allSessionErrors(),
+            [$lambda->name, 'hora'],
+            mode: 'all',
+            context: 'por_hora sin consumo (criterio 5)',
+        );
 
         $this->assertDatabaseCount('architectures', 0);
         $this->assertDatabaseCount('architecture_items', 0);
     }
 
     /**
-     * Criterio 5: el consumo obligatorio ausente (por_gb sin
-     * gb_per_month) bloquea la revisión y no persiste nada.
+     * Criterio 5: el consumo obligatorio ausente (por_gb sin «Consumo
+     * mensual») bloquea la revisión citando la unidad, y no persiste
+     * nada.
      */
     public function test_missing_gb_per_month_blocks_review_and_persists_nothing(): void
     {
@@ -301,62 +359,64 @@ class ArchitecturePricingTest extends TestCase
         $region = $this->regionFor('sin-gb');
         $project = $this->projectFor($user, $region);
 
-        $transfer = $this->productWithTariff($region, 'Tráfico por GB', 'redes', 15, 'por_gb');
+        $transfer = $this->productWithTariff($region, 'Transferencia vacía', 'redes', 15, 'por_gb');
         $compute = $this->productWithTariff($region, 'Servidor fijo', 'computacion', 850, 'fijo_mensual');
         $storage = $this->productWithTariff($region, 'Disco fijo', 'almacenamiento', 499, 'fijo_mensual');
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, [
-                ['product_id' => $transfer->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $compute->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $storage->id, 'quantity' => 3, 'config' => '{}'],
+                ['product_id' => $transfer->id, 'quantity' => 2],
+                ['product_id' => $compute->id, 'quantity' => 2],
+                ['product_id' => $storage->id, 'quantity' => 3],
             ]))
-            ->assertSessionHasErrors(['items']);
+            ->assertSessionHasErrors();
+
+        $this->assertMessagesMention(
+            $this->allSessionErrors(),
+            [$transfer->name, 'GB'],
+            mode: 'all',
+            context: 'por_gb sin consumo',
+        );
 
         $this->assertDatabaseCount('architectures', 0);
         $this->assertDatabaseCount('architecture_items', 0);
     }
 
     /**
-     * Criterio 5: los consumos negativos, no numéricos, demasiado grandes
-     * o con más de dos decimales se rechazan y no se persiste nada.
+     * Criterio 5 y contrato 4: los valores de «Consumo mensual»
+     * negativos, no numéricos, demasiado grandes o con más de dos
+     * decimales se rechazan y no se persiste nada.
      */
-    public function test_invalid_consumption_values_are_rejected_and_persist_nothing(): void
+    public function test_invalid_usage_values_are_rejected_and_persist_nothing(): void
     {
-        // [clave, valor] tal y como llegan del formulario.
-        $cases = [
-            ['hours_per_month', '-3'],
-            ['hours_per_month', '1.234'],
-            ['hours_per_month', '99999999999999999'],
-            ['hours_per_month', 'mucho'],
-            ['hours_per_month', ''],
-            ['gb_per_month', '-0.01'],
-            ['gb_per_month', '10.123'],
-            ['gb_per_month', 'ilimitado'],
-        ];
+        // Valores tal y como llegan del formulario (texto del input).
+        $cases = ['-3', '1.234', '99999999999999999', 'mucho', ''];
 
-        foreach ($cases as $i => [$key, $value]) {
+        foreach ($cases as $i => $usage) {
             $user = User::factory()->create();
             $region = $this->regionFor('uso-'.$i);
             $project = $this->projectFor($user, $region);
 
-            // El producto de la fila inválida y dos de relleno válidos
-            // (3 elementos, 2+ tipos): el rechazo se debe al consumo.
-            $consumable = $i < 4
-                ? $this->productWithTariff($region, 'Lambda por hora', 'almacenamiento', 200, 'por_hora')
-                : $this->productWithTariff($region, 'Tráfico por GB', 'redes', 15, 'por_gb');
+            // Mitad de los casos con tarifa por_hora y mitad con por_gb:
+            // el rechazo de un consumo inválido no depende de la unidad.
+            $metered = $i < 3 ? 'por_hora' : 'por_gb';
+            $consumable = $this->productWithTariff($region, 'Recurso tarificado', $i < 3 ? 'almacenamiento' : 'redes', 200, $metered);
             $filler1 = $this->productWithTariff($region, 'Servidor fijo', 'computacion', 850, 'fijo_mensual');
-            $filler2 = $i < 4
-                ? $this->productWithTariff($region, 'Firewall fijo', 'redes', 999, 'fijo_mensual')
-                : $this->productWithTariff($region, 'Disco fijo', 'almacenamiento', 499, 'fijo_mensual');
+            $filler2 = $this->productWithTariff($region, 'Firewall fijo', 'redes', 999, 'fijo_mensual');
+
+            $row = ['product_id' => $consumable->id, 'quantity' => 1];
+
+            if (! in_array($usage, ['', null], true)) {
+                $row['usage'] = $usage;
+            }
 
             $this->actingAs($user)
                 ->post(route('projects.architectures.review', $project), $this->payload($project, [
-                    ['product_id' => $consumable->id, 'quantity' => 1, 'config' => '{"'.$key.'": "'.$value.'"}'],
-                    ['product_id' => $filler1->id, 'quantity' => 2, 'config' => '{}'],
-                    ['product_id' => $filler2->id, 'quantity' => 1, 'config' => '{}'],
+                    $row,
+                    ['product_id' => $filler1->id, 'quantity' => 2],
+                    ['product_id' => $filler2->id, 'quantity' => 1],
                 ]))
-                ->assertSessionHasErrors(['items']);
+                ->assertSessionHasErrors();
 
             $this->assertDatabaseCount('architectures', 0);
             $this->assertDatabaseCount('architecture_items', 0);
@@ -383,9 +443,9 @@ class ArchitecturePricingTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, [
-                ['product_id' => $legacy->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $compute->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $network->id, 'quantity' => 3, 'config' => '{}'],
+                ['product_id' => $legacy->id, 'quantity' => 2],
+                ['product_id' => $compute->id, 'quantity' => 2],
+                ['product_id' => $network->id, 'quantity' => 3],
             ]))
             ->assertSessionHasErrors(['items']);
 
@@ -414,9 +474,9 @@ class ArchitecturePricingTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, [
-                ['product_id' => $lambda->id, 'quantity' => 1, 'config' => '{"hours_per_month": "0.5"}'],
-                ['product_id' => $compute->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $network->id, 'quantity' => 2, 'config' => '{}'],
+                ['product_id' => $lambda->id, 'quantity' => 1, 'usage' => '0.5'],
+                ['product_id' => $compute->id, 'quantity' => 2],
+                ['product_id' => $network->id, 'quantity' => 2],
             ]))
             ->assertSessionHasNoErrors();
 
@@ -449,9 +509,9 @@ class ArchitecturePricingTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, [
-                ['product_id' => $compute->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $storage->id, 'quantity' => 1, 'config' => '{}'],
-                ['product_id' => $network->id, 'quantity' => 1, 'config' => '{}'],
+                ['product_id' => $compute->id, 'quantity' => 2],
+                ['product_id' => $storage->id, 'quantity' => 1],
+                ['product_id' => $network->id, 'quantity' => 1],
             ]))
             ->assertSessionHasNoErrors();
 
@@ -484,9 +544,9 @@ class ArchitecturePricingTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, [
-                ['product_id' => $compute->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $storage->id, 'quantity' => 1, 'config' => '{}'],
-                ['product_id' => $network->id, 'quantity' => 1, 'config' => '{}'],
+                ['product_id' => $compute->id, 'quantity' => 2],
+                ['product_id' => $storage->id, 'quantity' => 1],
+                ['product_id' => $network->id, 'quantity' => 1],
             ], extra: [
                 // Un navegador manipulado intenta colar importes oficiales.
                 'total' => 9999,
@@ -530,9 +590,9 @@ class ArchitecturePricingTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, [
-                ['product_id' => $compute->id, 'quantity' => 2, 'config' => '{}'],
-                ['product_id' => $storage->id, 'quantity' => 3, 'config' => '{}'],
-                ['product_id' => $network->id, 'quantity' => 1, 'config' => '{}'],
+                ['product_id' => $compute->id, 'quantity' => 2],
+                ['product_id' => $storage->id, 'quantity' => 3],
+                ['product_id' => $network->id, 'quantity' => 1],
             ]))
             ->assertSessionHasNoErrors();
 
@@ -561,7 +621,7 @@ class ArchitecturePricingTest extends TestCase
      * Fila de formulario tal y como la envía el navegador con valores
      * de consumo como texto (los consumos los normaliza el servidor).
      *
-     * @param  array<int, array{product_id: int, quantity: int|string, config: string}>  $items
+     * @param  array<int, array{product_id: int, quantity: int|string, usage?: string}>  $items
      * @param  array<string, mixed>  $extra
      */
     private function payload(Project $project, array $items, array $extra = []): array

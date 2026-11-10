@@ -9,6 +9,8 @@ use App\Models\Project;
 use App\Models\Region;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\MessageBag;
+use Illuminate\Support\ViewErrorBag;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\CreatesCatalogData;
 use Tests\TestCase;
@@ -75,11 +77,13 @@ class ArchitectureTest extends TestCase
         $this->assertSame('manual', $architecture->source);
         $this->assertSame(3, $architecture->items()->count());
 
-        // Cada elemento con su cantidad y su configuración JSON decodificada.
+        // Cada elemento con su cantidad; la configuración interna se
+        // construye en servidor (tarifas fijas: vacía) y el navegador
+        // no envía JSON.
         foreach ($items as $item) {
             $stored = $architecture->items()->where('product_id', $item['product_id'])->firstOrFail();
             $this->assertSame($item['quantity'], $stored->quantity);
-            $this->assertSame(json_decode($item['config'], true), $stored->config);
+            $this->assertSame([], $stored->config);
         }
 
         // El borrador se consume al guardar: no queda revisión pendiente.
@@ -142,9 +146,9 @@ class ArchitectureTest extends TestCase
         $compute = $this->createProduct($this->uniqueCode('comp'), 'computacion', [$region->id]);
 
         $items = [
-            ['product_id' => $compute->id, 'quantity' => 1, 'config' => '{"rol": "web"}'],
-            ['product_id' => $compute->id, 'quantity' => 2, 'config' => '{"rol": "cola"}'],
-            ['product_id' => $compute->id, 'quantity' => 1, 'config' => '{"rol": "trabajos"}'],
+            ['product_id' => $compute->id, 'quantity' => 1],
+            ['product_id' => $compute->id, 'quantity' => 2],
+            ['product_id' => $compute->id, 'quantity' => 1],
         ];
 
         $this->actingAs($user)
@@ -163,7 +167,7 @@ class ArchitectureTest extends TestCase
         $region = $this->createRegion();
         $project = $this->projectFor($user, $region);
         $items = $this->validItemsFor($region);
-        $items[] = ['product_id' => 999999, 'quantity' => 1, 'config' => '{}'];
+        $items[] = ['product_id' => 999999, 'quantity' => 1];
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, $items))
@@ -185,7 +189,7 @@ class ArchitectureTest extends TestCase
         $items = $this->validItemsFor($region);
         $retired = $this->createProduct($this->uniqueCode('old'), 'monitorizacion', [$region->id], active: false);
 
-        $items[2] = ['product_id' => $retired->id, 'quantity' => 1, 'config' => '{}'];
+        $items[2] = ['product_id' => $retired->id, 'quantity' => 1];
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, $items))
@@ -208,7 +212,7 @@ class ArchitectureTest extends TestCase
         $items = $this->validItemsFor($regionA);
         $exclusive = $this->createProduct($this->uniqueCode('onlyb'), 'backup', [$regionB->id]);
 
-        $items[2] = ['product_id' => $exclusive->id, 'quantity' => 1, 'config' => '{}'];
+        $items[2] = ['product_id' => $exclusive->id, 'quantity' => 1];
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, $items))
@@ -248,23 +252,41 @@ class ArchitectureTest extends TestCase
     }
 
     /**
-     * Cada elemento necesita una configuración JSON individual válida
-     * (se admite un objeto vacío {}).
+     * Criterio 8: el cliente ya no envía configuración. Cualquier valor
+     * `items[*][config]` de la petición se IGNORA: un JSON válido, uno
+     * malformado o incluso un array no altera el resultado ni provoca
+     * errores. La configuración la construye el servidor a partir del
+     * consumo mensual.
      */
-    public function test_rejects_invalid_json_configuration(): void
+    public function test_config_sent_by_the_client_is_always_ignored(): void
     {
-        $user = User::factory()->create();
-        $region = $this->createRegion();
-        $project = $this->projectFor($user, $region);
-        $items = $this->validItemsFor($region);
-        $items[1]['config'] = '{"instancia": "t3.medium"'; // JSON malformado
+        $cases = [
+            'json malformado' => '{"vcpu": "4"', // JSON malformado
+            'json válido' => '{"vcpu": "99", "ram_gb": "999", "hours_per_month": "1"}',
+            'array php' => ['vcpu' => 99],
+        ];
 
-        $this->actingAs($user)
-            ->post(route('projects.architectures.review', $project), $this->payload($project, $items))
-            ->assertSessionHasErrors(['items']);
+        foreach ($cases as $context => $config) {
+            $user = User::factory()->create();
+            $region = $this->createRegion();
+            $project = $this->projectFor($user, $region);
+            $items = $this->validItemsFor($region);
+            $items[1]['config'] = $config;
 
-        $this->assertDatabaseCount('architectures', 0);
-        $this->assertDatabaseCount('architecture_items', 0);
+            $this->actingAs($user)
+                ->post(route('projects.architectures.review', $project), $this->payload($project, $items))
+                ->assertSessionHasNoErrors();
+
+            $this->post(route('projects.architectures.store', $project));
+            $architecture = Architecture::query()->where('project_id', $project->id)->firstOrFail();
+
+            $stored = $architecture->items()->where('product_id', $items[1]['product_id'])->firstOrFail();
+            $this->assertSame(
+                [],
+                $stored->config,
+                'Caso "'.$context.'": el cliente no puede inyectar configuración.',
+            );
+        }
     }
 
     /**
@@ -419,5 +441,358 @@ class ArchitectureTest extends TestCase
         // La transacción se revirtió por completo: 0 arquitecturas y 0 elementos guardados.
         $this->assertDatabaseCount('architectures', 0);
         $this->assertDatabaseCount('architecture_items', 0);
+    }
+
+    /**
+     * Criterio 1: el formulario de alta no contiene ningún campo ni
+     * texto que mencione JSON o «configuración JSON»; en cambio, cada
+     * uno de los 6 huecos ofrece su propio campo numérico de consumo
+     * mensual (`items[*][usage]`).
+     */
+    public function test_create_form_offers_monthly_usage_instead_of_json_configuration(): void
+    {
+        $user = User::factory()->create();
+        $region = $this->createRegion();
+        $project = $this->projectFor($user, $region);
+        $this->createProduct($this->uniqueCode('comp'), 'computacion', [$region->id]);
+
+        $html = $this->actingAs($user)
+            ->get(route('projects.architectures.create', ['project' => $project, 'region_id' => $region->id]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringNotContainsStringIgnoringCase('json', $html);
+        $this->assertStringNotContainsStringIgnoringCase('configuración json', $html);
+
+        for ($i = 0; $i < 6; $i++) {
+            $this->assertStringContainsString(
+                'name="items['.$i.'][usage]"',
+                $html,
+                'Falta el campo «Consumo mensual» del hueco '.($i + 1).'.',
+            );
+        }
+    }
+
+    /**
+     * Criterio 2: con 3 elementos rellenos y 3 huecos totalmente
+     * vacíos el alta es válida (> «al menos 3»), y los huecos vacíos
+     * no generan errores.
+     */
+    public function test_three_filled_and_three_empty_slots_are_a_valid_architecture(): void
+    {
+        $user = User::factory()->create();
+        $region = $this->createRegion();
+        $project = $this->projectFor($user, $region);
+        $items = $this->validItemsFor($region);
+
+        $this->actingAs($user)
+            ->post(route('projects.architectures.review', $project), $this->payload(
+                $project,
+                array_merge($items, $this->emptySlots(3)),
+            ))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('projects.architectures.check', $project));
+
+        $this->post(route('projects.architectures.store', $project));
+
+        $architecture = Architecture::query()->where('project_id', $project->id)->firstOrFail();
+        $this->assertSame(3, $architecture->items()->count());
+    }
+
+    /**
+     * Criterio 3: el formulario completo (6 huecos rellenos) es válido.
+     */
+    public function test_all_six_slots_filled_is_valid(): void
+    {
+        $user = User::factory()->create();
+        $region = $this->createRegion();
+        $project = $this->projectFor($user, $region);
+
+        $computers = collect(range(1, 3))->map(fn () => $this->createProduct($this->uniqueCode('comp'), 'computacion', [$region->id]));
+        $storages = collect(range(1, 3))->map(fn () => $this->createProduct($this->uniqueCode('store'), 'almacenamiento', [$region->id]));
+
+        $products = $computers->merge($storages);
+
+        $items = $products
+            ->map(fn ($product): array => ['product_id' => $product->id, 'quantity' => 1])
+            ->values()
+            ->all();
+
+        $this->actingAs($user)
+            ->post(route('projects.architectures.review', $project), $this->payload($project, $items))
+            ->assertSessionHasNoErrors();
+
+        $this->post(route('projects.architectures.store', $project));
+
+        $architecture = Architecture::query()->where('project_id', $project->id)->firstOrFail();
+        $this->assertSame(6, $architecture->items()->count());
+    }
+
+    /**
+     * Criterio 4: una fila parcial (producto sin cantidad, o cantidad
+     * sin producto) se rechaza y el error cita el número del hueco
+     * visible; los huecos totalmente vacíos no generan errores.
+     */
+    #[DataProvider('partial_slot_shapes')]
+    public function test_a_partially_filled_slot_is_rejected_citing_the_visible_slot(array $partial, array $complete): void
+    {
+        $user = User::factory()->create();
+        $region = $this->createRegion();
+        $project = $this->projectFor($user, $region);
+        $items = $this->validItemsFor($region);
+
+        $stray = $this->createProduct($this->uniqueCode('extra'), 'seguridad', [$region->id]);
+
+        if (isset($partial['product_id'])) {
+            $partial['product_id'] = $stray->id;
+        }
+
+        $items = array_merge($items, $this->emptySlots(2), [$partial + $complete]);
+
+        $this->actingAs($user)
+            ->post(route('projects.architectures.review', $project), $this->payload($project, $items))
+            ->assertSessionHasErrors();
+
+        $errors = $this->allSessionErrors();
+        $this->assertNotEmpty($errors, 'La fila parcial debe producir mensajes de error.');
+
+        $this->assertTrue(
+            collect($errors)->contains(fn (string $message): bool => (bool) preg_match('/\b6\b/', $message)),
+            'El error de la fila parcial debe citar el hueco visible (hueco 6). '
+            .'Mensajes recibidos: ['.implode(' | ', $errors).']',
+        );
+
+        $this->assertDatabaseCount('architectures', 0);
+        $this->assertDatabaseCount('architecture_items', 0);
+    }
+
+    public static function partial_slot_shapes(): array
+    {
+        return [
+            'producto sin cantidad' => [['product_id' => 'no-vacío'], []],
+            'cantidad sin producto' => [[], ['quantity' => '3']],
+        ];
+    }
+
+    /**
+     * Criterio 11: si la región no tiene productos activos y
+     * disponibles, el formulario atenua el envío — muestra un aviso
+     * claro y no ofrece el botón de revisión.
+     */
+    public function test_create_page_warns_about_a_region_without_products_and_offer_no_review(): void
+    {
+        $user = User::factory()->create();
+        $emptyRegion = $this->createRegion();
+        $project = $this->projectFor($user, $emptyRegion);
+
+        $html = $this->actingAs($user)
+            ->get(route('projects.architectures.create', ['project' => $project, 'region_id' => $emptyRegion->id]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsStringIgnoringCase(
+            'productos',
+            $html,
+            'La página debe avisar de que la región no tiene productos disponibles.',
+        );
+        $this->assertStringNotContainsString(
+            route('projects.architectures.review', $project),
+            $html,
+            'Sin productos, el formulario no debe ofrecer el envío a revisión.',
+        );
+    }
+
+    /**
+     * Criterio 11: una petición directa a la revisión con una región
+     * sin productos se rechaza con un mensaje comprensible; nada se
+     * persiste ni queda borrador pendiente.
+     */
+    public function test_direct_revision_of_a_region_without_products_is_rejected_comprehensibly(): void
+    {
+        $user = User::factory()->create();
+        $emptyRegion = $this->createRegion();
+        $project = $this->projectFor($user, $emptyRegion);
+
+        $otherRegion = $this->createRegion('con-catalogo');
+        $items = $this->validItemsFor($otherRegion);
+
+        $this->actingAs($user)
+            ->post(route('projects.architectures.review', $project), $this->payload($project, $items, $emptyRegion->id))
+            ->assertSessionHasErrors();
+
+        $errors = $this->allSessionErrors();
+        $this->assertNotEmpty($errors, 'La región sin productos debe rechazar la revisión con mensajes.');
+
+        $this->assertTrue(
+            collect($errors)->contains(fn (string $message): bool => str_contains($message, $emptyRegion->name)
+                || stripos(mb_strtolower($message), 'no hay productos') !== false
+                || stripos(mb_strtolower($message), 'sin productos') !== false),
+            'El rechazo debe ser comprensible (región sin productos). Mensajes: ['
+            .implode(' | ', $errors).']',
+        );
+
+        $this->assertDatabaseCount('architectures', 0);
+        $this->assertDatabaseCount('architecture_items', 0);
+        // Sin borrador pendiente para el proyecto.
+        $this->get(route('projects.architectures.check', $project))->assertRedirect();
+    }
+
+    /**
+     * Criterio 12: «Actualizar» región recarga el formulario con la
+     * entrada antigua: conserva nombre, productos, cantidades y
+     * consumo, muestra el catálogo de la región nueva y no guarda nada
+     * ni deja borrador pendiente.
+     */
+    public function test_updating_the_region_conserves_typed_data_and_stores_nothing(): void
+    {
+        $user = User::factory()->create();
+        $regionA = $this->createRegion('origen');
+        $regionB = $this->createRegion('destino');
+        $project = $this->projectFor($user, $regionA);
+
+        // Catálago visible inicialmente en la región A.
+        $aComp = $this->createProduct($this->uniqueCode('a-comp'), 'computacion', [$regionA->id]);
+        $aStore = $this->createProduct($this->uniqueCode('a-store'), 'almacenamiento', [$regionA->id]);
+        // Catálogo que solo existe en la región B.
+        $bComp = $this->createProduct($this->uniqueCode('b-comp'), 'computacion', [$regionB->id]);
+        $bStore = $this->createProduct($this->uniqueCode('b-store'), 'almacenamiento', [$regionB->id]);
+
+        $this->actingAs($user)
+            ->get(route('projects.architectures.create', ['project' => $project, 'region_id' => $regionA->id]))
+            ->assertOk()
+            ->assertSee($aComp->code, false);
+
+        $reloadUrl = $this->regionReloadAction(
+            route('projects.architectures.create', ['project' => $project, 'region_id' => $regionA->id]),
+            route('projects.architectures.review', $project),
+        );
+
+        // POST de recarga con entrada antigua: nombre + 3 filas
+        // (productos de A, cantidades y consumo).
+        $this->actingAs($user)
+            ->post($reloadUrl, [
+                'name' => 'Arquitectura transferida',
+                'region_id' => $regionB->id,
+                'items' => [
+                    ['product_id' => $aComp->id, 'quantity' => 2, 'usage' => '12.5'],
+                    ['product_id' => $aStore->id, 'quantity' => 1, 'usage' => ''],
+                    ['product_id' => $bComp->id, 'quantity' => 3, 'usage' => '7'],
+                ],
+            ])
+            ->assertRedirect();
+
+        // La recarga NO guarda nada ni crea borrador pendiente.
+        $this->assertDatabaseCount('architectures', 0);
+        $this->assertDatabaseCount('architecture_items', 0);
+        $this->get(route('projects.architectures.check', $project))->assertRedirect();
+
+        // El formulario reaparece con la entrada antigua intacta y el
+        // catálogo de la región nueva.
+        $html = $this->get(route('projects.architectures.create', ['project' => $project, 'region_id' => $regionB->id]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame(
+            'Arquitectura transferida',
+            $this->inputValue($html, 'name'),
+            'El nombre tecleado se conserva al recargar la región.',
+        );
+        $this->assertSame('2', $this->inputValue($html, 'items[0][quantity]'));
+        $this->assertSame('1', $this->inputValue($html, 'items[1][quantity]'));
+        $this->assertSame('3', $this->inputValue($html, 'items[2][quantity]'));
+        $this->assertSame('12.5', $this->inputValue($html, 'items[0][usage]'));
+        $this->assertSame('7', $this->inputValue($html, 'items[2][usage]'));
+
+        $this->assertStringContainsString($bComp->code, $html, 'El catálogo debe ser el de la región elegida.');
+        $this->assertStringNotContainsString($aStore->code, $html);
+    }
+
+    /**
+     * Valor del atributo `value` del primer input cuyo atributo `name`
+     * coincide (independiente del orden de atributos del HTML).
+     */
+    private function inputValue(string $html, string $name): ?string
+    {
+        preg_match_all('/<input\b([^>]*)>/i', $html, $tags);
+
+        foreach ($tags[1] as $attributes) {
+            $fieldName = preg_match('/name\s*=\s*["\']([^"\']*)["\']/i', $attributes, $n) ? $n[1] : null;
+
+            if ($fieldName !== $name) {
+                continue;
+            }
+
+            return preg_match('/value\s*=\s*["\']([^"\']*)["\']/i', $attributes, $v)
+                ? html_entity_decode($v[1], ENT_QUOTES | ENT_HTML5)
+                : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * busca la acción de recarga de región que ofrece el formulario de
+     * alta (criterio 12: formulario único + acción de recarga POST con
+     * entrada antigua). Lo localiza por el atributo formaction de un
+     * botón «Actualizar» o por un formulario POST distinto del envío a
+     * revisión.
+     */
+    private function regionReloadAction(string $pageUrl, string $reviewUrl): string
+    {
+        $html = $this->get($pageUrl)->assertOk()->getContent();
+
+        if (preg_match('/formaction\s*=\s*["\']([^"\']+)["\']/i', $html, $match)) {
+            return html_entity_decode($match[1], ENT_QUOTES | ENT_HTML5);
+        }
+
+        // Alternativa: un POST propio distinto del cierre de sesión y
+        // del envío a revisión.
+        preg_match_all('/<form\b([^>]*)>(.*?)<\/form>/si', $html, $candidates, PREG_SET_ORDER);
+
+        foreach ($candidates as [$attributes, $inner]) {
+            if (! preg_match('/method\s*=\s*["\']?post\b/i', $attributes)) {
+                continue;
+            }
+
+            $action = preg_match('/action\s*=\s*["\']([^"\']*)["\']/i', $attributes, $m)
+                ? html_entity_decode($m[1], ENT_QUOTES | ENT_HTML5)
+                : $pageUrl;
+
+            if (! str_contains($action, 'salir') && $action !== $reviewUrl) {
+                return $action;
+            }
+        }
+
+        $this->fail(
+            'Criterio 12: el formulario único debe ofrecer una acción de recarga '
+            .'(botón «Actualizar» con formaction a una ruta POST, o formulario POST '
+            .'propio distinto de la revisión). No se encontró.',
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function allSessionErrors(): array
+    {
+        $bag = session('errors');
+
+        if ($bag === null) {
+            return [];
+        }
+
+        if ($bag instanceof ViewErrorBag) {
+            return $bag->all();
+        }
+
+        if ($bag instanceof MessageBag) {
+            return $bag->all();
+        }
+
+        if (is_array($bag)) {
+            return collect($bag)->flatten()->all();
+        }
+
+        return [$bag];
     }
 }
