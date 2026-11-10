@@ -6,6 +6,7 @@ use App\Http\Requests\StoreRequirementRequest;
 use App\Http\Requests\UpdateRequirementRequest;
 use App\Models\Project;
 use App\Models\Requirement;
+use App\Services\RequirementService;
 use App\Services\RequirementRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,6 +20,8 @@ use Illuminate\View\View;
  */
 class RequirementController extends Controller
 {
+    public function __construct(private RequirementService $requirementService) {}
+
     public function index(Project $project): View
     {
         $this->authorize('view', $project);
@@ -54,15 +57,11 @@ class RequirementController extends Controller
      */
     public function store(StoreRequirementRequest $request, Project $project): RedirectResponse
     {
-        $data = $request->validated();
-
-        $requirement = new Requirement($data);
-        $requirement->project_id = $project->id;
-        $requirement->mandatory = $request->boolean('mandatory');
-        // El origen se fija en el servidor: el formulario manual solo
-        // crea requerimientos manuales, nunca puede falsearse a 'ia'.
-        $requirement->source = Requirement::SOURCE_MANUAL;
-        $requirement->save();
+        $requirement = $this->requirementService->create(
+            $project,
+            $request->validated(),
+            $request->boolean('mandatory'),
+        );
 
         return redirect()
             ->route('projects.requirements.show', [$project, $requirement])
@@ -103,9 +102,12 @@ class RequirementController extends Controller
 
     public function update(UpdateRequirementRequest $request, Project $project, Requirement $requirement): RedirectResponse
     {
-        $requirement->update($request->validated() + [
-            'mandatory' => $request->boolean('mandatory'),
-        ]);
+        $this->requirementService->update(
+            $project,
+            $requirement,
+            $request->validated(),
+            $request->boolean('mandatory'),
+        );
 
         return redirect()
             ->route('projects.requirements.show', [$project, $requirement])
@@ -121,7 +123,7 @@ class RequirementController extends Controller
     {
         $this->authorize('delete', $requirement);
 
-        $requirement->delete();
+        $this->requirementService->delete($project, $requirement);
 
         return redirect()
             ->route('projects.requirements.index', $project)

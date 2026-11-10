@@ -9,6 +9,7 @@ use App\Models\Project;
 use App\Models\Region;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\CreatesCatalogData;
 use Tests\TestCase;
 
@@ -220,13 +221,14 @@ class ArchitectureTest extends TestCase
      * Cantidades menores que 1 (0, negativas o no enteras) no se
      * aceptan.
      */
-    public function test_rejects_non_positive_quantities(): void
+    #[DataProvider('invalid_quantity_cases')]
+    public function test_rejects_non_positive_or_fractional_quantities(string|int $quantity): void
     {
         $user = User::factory()->create();
         $region = $this->createRegion();
         $project = $this->projectFor($user, $region);
         $items = $this->validItemsFor($region);
-        $items[0]['quantity'] = 0;
+        $items[0]['quantity'] = $quantity;
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, $items))
@@ -234,6 +236,15 @@ class ArchitectureTest extends TestCase
 
         $this->assertDatabaseCount('architectures', 0);
         $this->assertDatabaseCount('architecture_items', 0);
+    }
+
+    public static function invalid_quantity_cases(): array
+    {
+        return [
+            'zero' => [0],
+            'negative' => [-1],
+            'fractional' => ['1.5'],
+        ];
     }
 
     /**

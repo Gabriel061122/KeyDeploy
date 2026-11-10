@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Architecture;
+use App\Models\ArchitectureItem;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\User;
@@ -73,6 +74,7 @@ class ProjectTest extends TestCase
     public function test_owner_edits_project(): void
     {
         $user = User::factory()->create();
+        $other = User::factory()->create();
         $oldRegion = $this->createRegion('old-1');
         $newRegion = $this->createRegion('new-1');
         $project = Project::factory()->create([
@@ -87,6 +89,7 @@ class ProjectTest extends TestCase
                 'region_id' => $newRegion->id,
                 'max_budget' => 2000,
                 'expected_users' => 750,
+                'user_id' => $other->id,
             ])
             ->assertRedirect(route('projects.show', $project));
 
@@ -94,6 +97,7 @@ class ProjectTest extends TestCase
             'id' => $project->id,
             'name' => 'Tienda online 2.0',
             'region_id' => $newRegion->id,
+            'user_id' => $user->id,
         ]);
     }
 
@@ -133,6 +137,19 @@ class ProjectTest extends TestCase
             'region_id' => $region->id,
             'name' => 'Proyecto archivado',
         ]);
+        $requirement = Requirement::factory()->create([
+            'project_id' => $project->id,
+            'field_key' => 'usuarios_simultaneos',
+        ]);
+        $architecture = Architecture::factory()->create([
+            'project_id' => $project->id,
+            'region_id' => $region->id,
+        ]);
+        $product = $this->createProduct($this->uniqueCode('restore'), 'computacion', [$region->id]);
+        $architectureItem = ArchitectureItem::factory()->create([
+            'architecture_id' => $architecture->id,
+            'product_id' => $product->id,
+        ]);
         $project->delete();
 
         // El listado normal no lo muestra.
@@ -146,6 +163,11 @@ class ProjectTest extends TestCase
 
         $this->assertDatabaseHas('projects', ['id' => $project->id, 'deleted_at' => null]);
         $this->get(route('projects.index'))->assertOk()->assertSee('Proyecto archivado');
+
+        $restoredProject = Project::query()->findOrFail($project->id);
+        $this->assertTrue($restoredProject->requirements()->whereKey($requirement->id)->exists());
+        $this->assertTrue($restoredProject->architectures()->whereKey($architecture->id)->exists());
+        $this->assertTrue($architecture->items()->whereKey($architectureItem->id)->exists());
     }
 
     public function test_deleted_project_pages_are_not_reachable_with_normal_links(): void

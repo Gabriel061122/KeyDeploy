@@ -5,16 +5,13 @@ namespace App\Http\Controllers;
 use App\Exceptions\PricingException;
 use App\Http\Requests\StoreArchitectureRequest;
 use App\Models\Architecture;
-use App\Models\ArchitectureItem;
 use App\Models\Product;
 use App\Models\Project;
 use App\Models\Region;
-use App\Services\ArchitectureBusinessRules;
-use App\Services\ArchitecturePricingService;
+use App\Services\ArchitectureService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
@@ -24,15 +21,15 @@ use Illuminate\View\View;
  * 1. Formulario inicial: región, productos disponibles y filas por elemento.
  * 2. Revisión / previsualización: validación completa y resumen con precios.
  * 3. Confirmación y guardado definitivo: escritura atómica en DB::transaction().
+ *
+ * Toda la lógica de dominio (validación, reglas de negocio, precios y
+ * persistencia) se delega en ArchitectureService.
  */
 class ArchitectureController extends Controller
 {
     public const DRAFT_KEY = 'architecture_draft';
 
-    public function __construct(
-        public ArchitectureBusinessRules $businessRules,
-        public ArchitecturePricingService $pricingService,
-    ) {}
+    public function __construct(private ArchitectureService $architectureService) {}
 
     /**
      * Formulario de alta: región, productos disponibles (filtrados por
@@ -113,7 +110,7 @@ class ArchitectureController extends Controller
         $this->authorize('create', [Architecture::class, $project]);
 
         $region = Region::query()->findOrFail((int) $request->input('region_id'));
-        $evaluation = $this->businessRules->evaluate($project, $region, $request->input('items', []));
+        $evaluation = $this->architectureService->evaluate($project, $region, $request->input('items', []));
 
         if (! $evaluation['valid']) {
             return redirect()
@@ -165,7 +162,7 @@ class ArchitectureController extends Controller
             ->get()
             ->keyBy('id');
 
-        $evaluation = $this->businessRules->evaluate($project, $region, $draft['items']);
+        $evaluation = $this->architectureService->evaluate($project, $region, $draft['items']);
         $pricing = $evaluation['pricing'];
         $pricingError = $pricing === null
             ? implode(' ', array_unique($evaluation['errors']))
@@ -183,9 +180,10 @@ class ArchitectureController extends Controller
     }
 
     /**
-     * Guardado atómico: la arquitectura y todos sus elementos se
-     * escriben dentro de una única transacción; si algo falla, nada
-     * queda a medio guardar (principio de coherencia de RN08).
+     * Guardado atómico: el servicio valida de nuevo (la sesión nunca
+     * sustituye a la comprobación en el servidor) y persiste la
+     * arquitectura y todos sus elementos dentro de una única transacción;
+     * si algo falla, nada queda a medio guardar.
      */
     public function store(Request $request, Project $project): RedirectResponse
     {
@@ -200,34 +198,20 @@ class ArchitectureController extends Controller
         }
 
         $region = Region::query()->findOrFail($draft['region_id']);
-        $evaluation = $this->businessRules->evaluate($project, $region, $draft['items']);
+        $result = $this->architectureService->createManual(
+            $project,
+            $region,
+            $draft['name'],
+            $draft['items'],
+        );
 
-        if (! $evaluation['valid']) {
+        if ($result['architecture'] === null) {
             return redirect()
                 ->route('projects.architectures.create', $project)
-                ->withErrors($evaluation['errors']);
+                ->withErrors($result['errors']);
         }
 
-        /** @var Architecture $architecture */
-        $architecture = DB::transaction(function () use ($project, $draft, $evaluation): Architecture {
-            $architecture = Architecture::query()->create([
-                'project_id' => $project->id,
-                'region_id' => $draft['region_id'],
-                'name' => $draft['name'],
-                'source' => Architecture::SOURCE_MANUAL,
-            ]);
-
-            foreach ($evaluation['items'] as $item) {
-                ArchitectureItem::query()->create([
-                    'architecture_id' => $architecture->id,
-                    'product_id' => $item['product_id'],
-                    'quantity' => $item['quantity'],
-                    'config' => $item['config'],
-                ]);
-            }
-
-            return $architecture;
-        });
+        $architecture = $result['architecture'];
 
         $request->session()->forget(self::DRAFT_KEY);
 
@@ -256,7 +240,8 @@ class ArchitectureController extends Controller
     }
 
     /**
-     * Ficha detallada de una arquitectura y sus elementos.
+     * Ficha detallada de una arquitectura y sus elementos, con el
+     * desglose de precios y los avisos de presupuesto cuando proceda.
      */
     public function show(Architecture $architecture): View
     {
@@ -269,8 +254,8 @@ class ArchitectureController extends Controller
         $warnings = [];
 
         try {
-            $pricing = $this->pricingService->calculateForArchitecture($architecture);
-            $warnings = $this->businessRules->budgetWarnings($architecture->project, $pricing);
+            $pricing = $this->architectureService->pricingForArchitecture($architecture);
+            $warnings = $this->architectureService->budgetWarnings($architecture->project, $pricing);
         } catch (PricingException $exception) {
             $pricingError = $exception->getMessage();
         }
