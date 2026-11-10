@@ -21,9 +21,7 @@ class Provider extends Model
     /**
      * @var array<int, string>
      */
-    protected $fillable = [
-        'name',
-    ];
+    protected $fillable = ['name'];
 
     /**
      * Productos suministrados por este proveedor.
