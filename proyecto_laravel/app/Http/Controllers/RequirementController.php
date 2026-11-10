@@ -6,8 +6,8 @@ use App\Http\Requests\StoreRequirementRequest;
 use App\Http\Requests\UpdateRequirementRequest;
 use App\Models\Project;
 use App\Models\Requirement;
-use App\Services\RequirementService;
 use App\Services\RequirementRules;
+use App\Services\RequirementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -66,6 +66,32 @@ class RequirementController extends Controller
         return redirect()
             ->route('projects.requirements.show', [$project, $requirement])
             ->with('success', 'Requerimiento creado correctamente.');
+    }
+
+    /**
+     * Recarga el formulario de alta con el tipo de dato elegido sin
+     * guardar, conservando campo, operador, valor y obligatoriedad.
+     */
+    public function refreshType(Project $project, Request $request): RedirectResponse
+    {
+        $this->authorize('view', $project);
+
+        return redirect()
+            ->route('projects.requirements.create', $project)
+            ->withInput($request->input());
+    }
+
+    /**
+     * Recarga el formulario de edición con el tipo de dato elegido sin
+     * guardar los cambios.
+     */
+    public function refreshTypeForEdit(Project $project, Requirement $requirement, Request $request): RedirectResponse
+    {
+        $this->authorize('view', $requirement);
+
+        return redirect()
+            ->route('projects.requirements.edit', [$project, $requirement])
+            ->withInput($request->input());
     }
 
     public function show(Project $project, Requirement $requirement): View

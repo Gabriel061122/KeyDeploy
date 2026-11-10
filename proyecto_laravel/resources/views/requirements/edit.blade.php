@@ -17,6 +17,7 @@
     'fieldKey' => $fieldKey,
     'routeTarget' => route('projects.requirements.edit', [$project, $requirement]),
     'routeAction' => route('projects.requirements.update', [$project, $requirement]),
+    'routeRefresh' => route('projects.requirements.refresh.edit', [$project, $requirement]),
     'isEdit' => true,
     'submitLabel' => 'Guardar cambios',
 ])

@@ -67,9 +67,23 @@ Route::middleware('auth')->group(function () {
         ->scopeBindings()
         ->whereNumber(['project', 'requirement']);
 
+    // Recarga del formulario dinámico conservando lo tecleado, sin guardar.
+    Route::post('proyectos/{project}/requerimientos/tipo', [RequirementController::class, 'refreshType'])
+        ->name('projects.requirements.refresh')
+        ->whereNumber('project');
+
+    Route::put('proyectos/{project}/requerimientos/{requirement}/tipo', [RequirementController::class, 'refreshTypeForEdit'])
+        ->name('projects.requirements.refresh.edit')
+        ->scopeBindings()
+        ->whereNumber(['project', 'requirement']);
+
     // Arquitecturas manuales: alta en tres pasos sin JavaScript.
     Route::get('proyectos/{project}/arquitecturas/crear', [ArchitectureController::class, 'create'])
         ->name('projects.architectures.create')
+        ->whereNumber('project');
+
+    Route::post('proyectos/{project}/arquitecturas/region', [ArchitectureController::class, 'refresh'])
+        ->name('projects.architectures.refresh')
         ->whereNumber('project');
 
     Route::post('proyectos/{project}/arquitecturas/revisar', [ArchitectureController::class, 'preview'])

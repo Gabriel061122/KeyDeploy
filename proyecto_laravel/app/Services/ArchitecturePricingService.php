@@ -165,7 +165,7 @@ final class ArchitecturePricingService
             allowMissing: true,
         );
 
-        $config = $this->normalizeConfig($item['config'] ?? null, $position);
+        $config = $this->normalizeConfig($item['config'] ?? null);
 
         $usageHundredths = null;
         $usageField = null;
@@ -178,15 +178,10 @@ final class ArchitecturePricingService
 
         if ($usageField !== null) {
             if (! array_key_exists($usageField, $config)) {
-                throw new PricingException(sprintf(
-                    '%s usa la modalidad "%s" y necesita el consumo "%s" en su configuración.',
-                    $element,
-                    $pricingModel->label(),
-                    $usageField,
-                ));
+                throw new PricingException($this->usageRequiredMessage($element, $pricingModel));
             }
 
-            $usageHundredths = $this->parseUsageHundredths($config[$usageField], $usageField, $element);
+            $usageHundredths = $this->parseUsageHundredths($config[$usageField], $element);
             $rawMonthly = $this->safeMultiply(
                 $priceCents,
                 $usageHundredths,
@@ -276,41 +271,23 @@ final class ArchitecturePricingService
     }
 
     /**
-     * @return array<string, mixed>
+     * La configuración llega ya construida en el servidor (nunca como JSON
+     * del cliente); solo se normaliza el consumo interno cuando procede.
      *
-     * @throws PricingException
+     * @return array<string, mixed>
      */
-    private function normalizeConfig(mixed $config, int $position): array
+    private function normalizeConfig(mixed $config): array
     {
-        if (is_array($config)) {
-            return $config;
-        }
+        return is_array($config) ? $config : [];
+    }
 
-        if (is_string($config)) {
-            $trimmed = trim($config);
-
-            if ($trimmed === '') {
-                return [];
-            }
-
-            try {
-                $decoded = json_decode($trimmed, true, 512, JSON_THROW_ON_ERROR);
-            } catch (\JsonException) {
-                throw new PricingException(sprintf(
-                    'El elemento %d contiene una configuración JSON no válida.',
-                    $position,
-                ));
-            }
-
-            if (is_array($decoded)) {
-                return $decoded;
-            }
-        }
-
-        throw new PricingException(sprintf(
-            'La configuración del elemento %d debe ser un objeto JSON válido.',
-            $position,
-        ));
+    private function usageRequiredMessage(string $element, PricingModel $pricingModel): string
+    {
+        return match ($pricingModel) {
+            PricingModel::PorHora => sprintf('%s se factura por hora: indica el consumo mensual en horas.', $element),
+            PricingModel::PorGb => sprintf('%s se factura por GB: indica el consumo mensual en GB.', $element),
+            default => sprintf('%s necesita un consumo mensual válido.', $element),
+        };
     }
 
     /**
@@ -319,12 +296,11 @@ final class ArchitecturePricingService
      *
      * @throws PricingException
      */
-    private function parseUsageHundredths(mixed $value, string $field, string $element): int
+    private function parseUsageHundredths(mixed $value, string $element): int
     {
         $invalid = sprintf(
-            '%s tiene un consumo "%s" no válido: debe ser un número no negativo con hasta dos decimales.',
+            '%s tiene un consumo mensual no válido: debe ser un número no negativo con hasta dos decimales.',
             $element,
-            $field,
         );
 
         if (is_bool($value) || ! is_int($value) && ! is_float($value) && ! is_string($value)) {
@@ -344,22 +320,21 @@ final class ArchitecturePricingService
 
         if (strlen($integerPart) > 17) {
             throw new PricingException(sprintf(
-                '%s tiene un consumo "%s" demasiado grande.',
+                '%s tiene un consumo mensual demasiado grande.',
                 $element,
-                $field,
             ));
         }
 
         $integerHundredths = $this->safeMultiply(
             (int) $integerPart,
             100,
-            sprintf('%s tiene un consumo "%s" demasiado grande.', $element, $field),
+            sprintf('%s tiene un consumo mensual demasiado grande.', $element),
         );
 
         return $this->safeAdd(
             $integerHundredths,
             (int) str_pad($decimalPart, 2, '0'),
-            sprintf('%s tiene un consumo "%s" demasiado grande.', $element, $field),
+            sprintf('%s tiene un consumo mensual demasiado grande.', $element),
         );
     }
 

@@ -70,13 +70,6 @@
                     <td>{{ number_format($line->unit_price_cents / 100, 2) }} €</td>
                     <td>{{ number_format($line->line_total_cents / 100, 2) }} €</td>
                 </tr>
-                @if ($line->config)
-                    <tr>
-                        <td colspan="7" style="padding-left:2rem">
-                            <pre class="config" style="margin:0.25rem 0">{{ json_encode($line->config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
-                        </td>
-                    </tr>
-                @endif
             @endforeach
         </tbody>
     </table>

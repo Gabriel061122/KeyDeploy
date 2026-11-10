@@ -8,6 +8,7 @@ use App\Models\Architecture;
 use App\Models\Product;
 use App\Models\Project;
 use App\Models\Region;
+use App\Services\ArchitecturePricingService;
 use App\Services\ArchitectureService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,8 +34,8 @@ class ArchitectureController extends Controller
 
     /**
      * Formulario de alta: región, productos disponibles (filtrados por
-     * la región elegida, recargando la página con un GET) y una fila por
-     * elemento con producto, cantidad y configuración JSON individual.
+     * la región elegida mediante la acción de recarga) y una fila por
+     * elemento con producto, cantidad y consumo mensual.
      */
     public function create(Project $project, Request $request): View
     {
@@ -69,7 +70,7 @@ class ArchitectureController extends Controller
                 $rowState[] = [
                     'product_id' => $row['product_id'] ?? null,
                     'quantity' => $row['quantity'] ?? null,
-                    'config' => $row['config'] ?? null,
+                    'usage' => $row['usage'] ?? null,
                 ];
 
                 continue;
@@ -77,17 +78,19 @@ class ArchitectureController extends Controller
 
             $draftRow = $draftItems[$i] ?? null;
             if (is_array($draftRow)) {
-                $config = $draftRow['config'] ?? null;
+                $config = is_array($draftRow['config'] ?? null) ? $draftRow['config'] : [];
                 $rowState[] = [
                     'product_id' => $draftRow['product_id'] ?? null,
                     'quantity' => $draftRow['quantity'] ?? null,
-                    'config' => is_array($config) ? json_encode($config) : $config,
+                    'usage' => $config[ArchitecturePricingService::HOURS_FIELD]
+                        ?? $config[ArchitecturePricingService::GB_FIELD]
+                        ?? null,
                 ];
 
                 continue;
             }
 
-            $rowState[] = ['product_id' => null, 'quantity' => null, 'config' => null];
+            $rowState[] = ['product_id' => null, 'quantity' => null, 'usage' => null];
         }
 
         return view('architectures.create', [
@@ -99,6 +102,20 @@ class ArchitectureController extends Controller
             'rowState' => $rowState,
             'name' => $name,
         ]);
+    }
+
+    /**
+     * Recarga el formulario de alta conservando lo ya introducido: la
+     * región determina el catálogo de productos disponibles (RN05) y el
+     * envío se reanuda sobre la misma pantalla sin guardar nada.
+     */
+    public function refresh(Project $project, Request $request): RedirectResponse
+    {
+        $this->authorize('view', $project);
+
+        return redirect()
+            ->route('projects.architectures.create', $project)
+            ->withInput($request->input());
     }
 
     /**
