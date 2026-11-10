@@ -44,8 +44,8 @@
     @switch ($selectedType)
         @case('boolean')
             <select id="value" name="value">
-                <option value="1"@selected(strtolower((string) $value) === '1' || strtolower((string) $value) === 'true' || strtolower((string) $value) === 'verdadero' || strtolower((string) $value) === 'si' || strtolower((string) $value) === 'sí')>Verdadero</option>
-                <option value="0"@selected(strtolower((string) $value) === '0' || strtolower((string) $value) === 'false' || strtolower((string) $value) === 'falso' || strtolower((string) $value) === 'no')>Falso</option>
+                <option value="1" @selected(strtolower((string) $value) === '1' || strtolower((string) $value) === 'true' || strtolower((string) $value) === 'verdadero' || strtolower((string) $value) === 'si' || strtolower((string) $value) === 'sí')>Verdadero</option>
+                <option value="0" @selected(strtolower((string) $value) === '0' || strtolower((string) $value) === 'false' || strtolower((string) $value) === 'falso' || strtolower((string) $value) === 'no')>Falso</option>
             </select>
         @break
         @case('integer')
