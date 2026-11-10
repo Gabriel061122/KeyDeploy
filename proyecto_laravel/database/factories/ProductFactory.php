@@ -16,15 +16,23 @@ class ProductFactory extends Factory
 
     public function definition(): array
     {
-        $suffix = substr(bin2hex(random_bytes(5)), 0, 6);
+        $type = fake()->randomElement(ProductType::cases());
 
         return [
             'provider_id' => Provider::factory(),
             'name' => 'Instancia '.fake()->words(2, true),
             'description' => fake()->sentence(),
-            'type' => fake()->randomElement(ProductType::cases()),
+            'type' => $type,
             'billing_unit' => 'mes',
-            'config' => ['vcpu' => 2, 'ram_gb' => 4],
+            'config' => match ($type) {
+                ProductType::Computacion, ProductType::ComputacionIa => ['vcpu' => 2, 'ram_gb' => 4],
+                ProductType::Almacenamiento => ['capacity_gb' => 100, 'storage_type' => 'ssd'],
+                ProductType::BasesDeDatos, ProductType::BaseDatos => ['engine' => 'postgresql', 'storage_gb' => 50],
+                ProductType::Redes, ProductType::Red => ['bandwidth_mbps' => 100],
+                ProductType::Seguridad => ['rules_count' => 10],
+                ProductType::Backup => ['retention_days' => 30],
+                default => [],
+            },
             'active' => true,
         ];
     }

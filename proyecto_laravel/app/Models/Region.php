@@ -33,8 +33,7 @@ class Region extends Model
     {
         return [
             'is_eu' => 'boolean',
-        protected function casts(): array { return ['is_eu' => 'boolean']; }
-            ];
+        ];
     }
 
     /**

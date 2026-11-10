@@ -22,7 +22,7 @@ return new class extends Migration
             $table->foreignId('provider_id')->nullable()->constrained('providers')->nullOnDelete();
             $table->boolean('available')->default(true);
             $table->unsignedInteger('price_cents')->default(0);
-            $table->string('pricing_model')->default('mensual');
+            $table->string('pricing_model')->default('fijo_mensual');
             $table->timestamps();
 
             $table->unique(['product_id', 'region_id']);

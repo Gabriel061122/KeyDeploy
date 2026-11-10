@@ -14,8 +14,6 @@ class RegionFactory extends Factory
 
     public function definition(): array
     {
-        $suffix = substr(bin2hex(random_bytes(5)), 0, 6);
-
         return [
             'code' => fake()->unique()->lexify('??-????-?'),
             'name' => fake()->city().' Region',

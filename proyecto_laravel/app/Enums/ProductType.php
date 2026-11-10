@@ -2,6 +2,8 @@
 
 namespace App\Enums;
 
+use App\Enums\PricingModel;
+
 /**
  * Tipos de producto del catálogo según la sección 5.1 y 6.1 de la plantilla UT2.
  * Contempla los 6 tipos mínimos exigidos por UT2 y variantes compatibles del análisis UT1.
@@ -70,6 +72,14 @@ enum ProductType: string
                 'config.retention_days' => ['required', 'integer', 'min:1'],
             ],
             default => [],
+        };
+    }
+
+    public function defaultPricingModel(): PricingModel
+    {
+        return match ($this) {
+            self::Almacenamiento => PricingModel::PorGb,
+            default => PricingModel::FijoMensual,
         };
     }
 }

@@ -31,7 +31,7 @@ return new class extends Migration
                     $table->unsignedBigInteger('price_cents')->default(0)->after('available');
                 }
                 if (! Schema::hasColumn('product_availabilities', 'pricing_model')) {
-                    $table->string('pricing_model', 20)->default('mensual')->after('price_cents');
+                    $table->string('pricing_model', 20)->default('fijo_mensual')->after('price_cents');
                 }
             });
         }
@@ -42,11 +42,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('product_availabilities', function (Blueprint $table) {
-            $table->dropForeign(['provider_id']);
-            $table->dropColumn(['provider_id', 'available', 'price_cents', 'pricing_model']);
-        });
-
-        Schema::rename('product_availabilities', 'product_region');
+        // La migración base del catálogo crea ya la estructura actual.
     }
 };

@@ -53,25 +53,13 @@ class Product extends Model
             'unit_price' => 'decimal:2',
             'config' => 'array',
             'active' => 'boolean',
+            'type' => ProductType::class,
         ];
-    }
-
-    /**
-     * Mutador para admitir tanto ProductType enum como string.
-     */
-    public function setTypeAttribute($value): void
-    {
-        $this->attributes['type'] = $value instanceof ProductType ? $value->value : (string) $value;
     }
 
     /**
      * Helper opcional para obtener el Enum correspondiente.
      */
-    public function typeEnum(): ?ProductType
-    {
-        return ProductType::tryFrom($this->attributes['type'] ?? '');
-    }
-
     /**
      * Proveedor del producto (1:N con política restrict/null).
      */

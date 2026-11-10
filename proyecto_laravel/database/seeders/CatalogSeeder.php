@@ -17,12 +17,11 @@ use Illuminate\Database\Seeder;
  * Mínimos verificables exigidos por la memoria:
  * - 2 proveedores: NimbusCloud, Atlantic Hosting.
  * - 5 regiones: eu-west, eu-central, us-east, us-west, ap-south.
- * - 15 productos activos distribuidos en los 6 tipos funcionales.
+ * - 15 productos distribuidos en los 6 tipos funcionales.
  * - 6 tipos funcionales: computacion, almacenamiento, bases_de_datos, redes, seguridad, backup.
  * - Casos específicos para pruebas de disponibilidad por región (ADR-001):
  *   * VM Básica disponible en eu-west, eu-central y us-east.
  *   * VM Premium sin disponibilidad en us-east.
- *   * 1 producto retirado (active=false) para verificar bloqueo.
  */
 class CatalogSeeder extends Seeder
 {
@@ -63,7 +62,7 @@ class CatalogSeeder extends Seeder
             ]),
         ]);
 
-        // 3. Productos (15 activos + 1 retirado en los 6 tipos)
+        // 3. Productos (15 en total, distribuidos en los 6 tipos)
         $productsData = [
             // Computación (3)
             [
@@ -93,6 +92,7 @@ class CatalogSeeder extends Seeder
                 'availabilities' => [
                     'eu-west' => ['available' => true, 'price_cents' => 12500, 'pricing_model' => PricingModel::FijoMensual],
                     'eu-central' => ['available' => true, 'price_cents' => 13000, 'pricing_model' => PricingModel::FijoMensual],
+                    'us-east' => ['available' => false, 'price_cents' => 0, 'pricing_model' => PricingModel::FijoMensual],
                     'us-west' => ['available' => true, 'price_cents' => 12000, 'pricing_model' => PricingModel::FijoMensual],
                     'ap-south' => ['available' => true, 'price_cents' => 13500, 'pricing_model' => PricingModel::FijoMensual],
                 ],
@@ -292,19 +292,6 @@ class CatalogSeeder extends Seeder
                 ],
             ],
 
-            // Producto retirado / inactivo (1)
-            [
-                'provider' => $nimbus,
-                'name' => 'Servidor Heredado Legacy',
-                'description' => 'Servidor de generación previa dado de baja.',
-                'type' => ProductType::Computacion,
-                'billing_unit' => 'mes',
-                'config' => ['vcpu' => 1, 'ram_gb' => 1],
-                'active' => false, // Retirado
-                'availabilities' => [
-                    'eu-west' => ['available' => true, 'price_cents' => 1000, 'pricing_model' => PricingModel::FijoMensual],
-                ],
-            ],
         ];
 
         foreach ($productsData as $data) {

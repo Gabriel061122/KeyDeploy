@@ -3,6 +3,8 @@
 use App\Http\Controllers\ArchitectureController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartItemController;
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectFileController;
 use App\Http\Controllers\QuoteController;
@@ -19,9 +21,9 @@ use Illuminate\Support\Facades\Route;
 | (GET), sin JavaScript.
 */
 
-Route::get('/', function () {
-    return view('welcome');
-})->name('home');
+Route::get('/', [HomeController::class, 'index'])->name('home');
+Route::get('productos', [ProductController::class, 'index'])->name('products.index');
+Route::get('productos/{product}', [ProductController::class, 'show'])->name('products.show')->whereNumber('product');
 
 // Registro público: solo crea cuentas CLIENTE (RF14).
 Route::middleware('guest')->group(function () {
@@ -36,6 +38,11 @@ Route::post('salir', [AuthController::class, 'logout'])
     ->name('logout');
 
 Route::middleware('auth')->group(function () {
+    Route::get('productos/crear', [ProductController::class, 'create'])->name('products.create');
+    Route::post('productos', [ProductController::class, 'store'])->name('products.store');
+    Route::get('productos/{product}/editar', [ProductController::class, 'edit'])->name('products.edit')->whereNumber('product');
+    Route::put('productos/{product}', [ProductController::class, 'update'])->name('products.update')->whereNumber('product');
+    Route::delete('productos/{product}', [ProductController::class, 'destroy'])->name('products.destroy')->whereNumber('product');
     // La papelera se registra antes del recurso para que "trash" no se
     // interprete como identificador de proyecto.
     Route::get('papelera/proyectos', [ProjectController::class, 'trash'])->name('projects.trash');

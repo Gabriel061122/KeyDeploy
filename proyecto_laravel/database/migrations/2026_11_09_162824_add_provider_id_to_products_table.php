@@ -25,9 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('products', function (Blueprint $table) {
-            $table->dropForeign(['provider_id']);
-            $table->dropColumn('provider_id');
-        });
+        // La migración base del catálogo ya define products.provider_id.
     }
 };
