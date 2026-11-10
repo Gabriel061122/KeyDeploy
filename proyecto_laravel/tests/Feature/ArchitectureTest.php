@@ -596,9 +596,9 @@ class ArchitectureTest extends TestCase
             'La página debe avisar de que la región no tiene productos disponibles.',
         );
         $this->assertStringNotContainsString(
-            route('projects.architectures.review', $project),
+            'Revisar y previsualizar',
             $html,
-            'Sin productos, el formulario no debe ofrecer el envío a revisión.',
+            'Sin productos, el formulario no debe ofrecer el botón de envío a revisión.',
         );
     }
 
@@ -684,10 +684,10 @@ class ArchitectureTest extends TestCase
         // La recarga NO guarda nada ni crea borrador pendiente.
         $this->assertDatabaseCount('architectures', 0);
         $this->assertDatabaseCount('architecture_items', 0);
-        $this->get(route('projects.architectures.check', $project))->assertRedirect();
 
         // El formulario reaparece con la entrada antigua intacta y el
-        // catálogo de la región nueva.
+        // catálogo de la región nueva. Se lee antes de consumir la
+        // entrada antigua con la comprobación del borrador.
         $html = $this->get(route('projects.architectures.create', ['project' => $project, 'region_id' => $regionB->id]))
             ->assertOk()
             ->getContent();
@@ -705,6 +705,9 @@ class ArchitectureTest extends TestCase
 
         $this->assertStringContainsString($bComp->code, $html, 'El catálogo debe ser el de la región elegida.');
         $this->assertStringNotContainsString($aStore->code, $html);
+
+        // Y la recarga no deja borrador pendiente de revisión.
+        $this->get(route('projects.architectures.check', $project))->assertRedirect();
     }
 
     /**

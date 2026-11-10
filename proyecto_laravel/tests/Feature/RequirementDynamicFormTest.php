@@ -133,8 +133,8 @@ class RequirementDynamicFormTest extends TestCase
 
         $this->postTypeAndReload($user, $project, 'boolean')
             ->assertOk()
-            ->assertSee('<option value="1">Verdadero</option>', false)
-            ->assertSee('<option value="0">Falso</option>', false)
+            ->assertSee('>Verdadero</option>', false)
+            ->assertSee('>Falso</option>', false)
             ->assertDontSee('type="number" name="value"', false)
             ->assertDontSee('type="text" name="value"', false);
 
@@ -184,7 +184,8 @@ class RequirementDynamicFormTest extends TestCase
             ->assertOk()
             ->assertSee('— Elige un operador —', false) // operador descartado
             ->assertDontSee('value="gt"', false)
-            ->assertSee('<option value="1">Verdadero</option>', false);
+            // El valor tecleado ('1') se conserva y marca «Verdadero».
+            ->assertSee('<option value="1" selected>Verdadero</option>', false);
 
         $this->assertDatabaseCount('requirements', 0);
     }

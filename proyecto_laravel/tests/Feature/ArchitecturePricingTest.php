@@ -77,7 +77,7 @@ class ArchitecturePricingTest extends TestCase
 
         // Criterio 10: la previsualización ya no muestra columna de
         // configuración (el consumo se muestra en «Consumo mensual»).
-        $this->assertDontSee('Configuración', $check);
+        $check->assertDontSee('Configuración');
 
         $response = $this->post(route('projects.architectures.store', $project));
         $architecture = Architecture::query()->firstOrFail();
@@ -89,7 +89,7 @@ class ArchitecturePricingTest extends TestCase
         $this->assertSeesAmount($detail, 1980);
         $this->assertSeesAmount($detail, 3600);
         $this->assertSeesAmount($detail, 9330);
-        $this->assertDontSee('Configuración', $detail);
+        $detail->assertDontSee('Configuración');
     }
 
     /**
@@ -104,9 +104,9 @@ class ArchitecturePricingTest extends TestCase
         $project = $this->projectFor($user, $region);
 
         // 1000 × 2 = 2000 céntimos; la tarifa fija cobra igual con o sin uso.
-        $compute = $this->productWithTariff($region, 'Servidor indiferente', 'computacion', 1000);
-        $storage = $this->productWithTariff($region, 'Disco indiferente', 'almacenamiento', 500);
-        $network = $this->productWithTariff($region, 'Firewall indiferente', 'redes', 300);
+        $compute = $this->productWithTariff($region, 'Servidor indiferente', 'computacion', 1000, 'fijo_mensual');
+        $storage = $this->productWithTariff($region, 'Disco indiferente', 'almacenamiento', 500, 'fijo_mensual');
+        $network = $this->productWithTariff($region, 'Firewall indiferente', 'redes', 300, 'fijo_mensual');
 
         $this->actingAs($user)
             ->post(route('projects.architectures.review', $project), $this->payload($project, [
