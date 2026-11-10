@@ -1,41 +1,29 @@
 {{--
-    Formulario dinámico de requerimientos SIN JavaScript:
-    - Formulario 1 (GET): cambia el tipo de dato y recarga la página con
-      los operadores compatibles y el campo adaptado, conservando lo ya
-      tecleado en campos ocultos.
-    - Formulario 2 (POST): envío principal; el servidor revalida todo.
+    Formulario dinámico de requerimientos SIN JavaScript: un único
+    formulario envía el tipo de dato junto al resto de campos. El botón
+    «Actualizar» usa su propia acción de recarga para volver a mostrar los
+    operadores compatibles y el campo de valor adaptado conservando lo ya
+    tecleado, sin guardar nada.
 --}}
-<h2>Formulario de actualización del tipo</h2>
-<form method="GET" action="{{ $routeTarget }}" class="card" style="border-left: 4px solid var(--kdd);">
-    <fieldset>
-        <legend><strong>Paso 1 — Elige el tipo de dato</strong></legend>
-        <p class="muted">Pulsa «Actualizar» para recargar la página con los operadores y el campo de valor adecuados. Lo que ya hayas tecleado se conserva.</p>
-        <input type="hidden" name="field_key" value="{{ $fieldKey }}">
-        <input type="hidden" name="operator" value="{{ $selectedOperator }}">
-        <input type="hidden" name="value" value="{{ $value }}">
-        @if ($mandatory)
-            <input type="hidden" name="mandatory" value="1">
-        @endif
-        <label for="data_type" style="margin-top: 0;">Tipo de dato</label>
-        <div style="display: flex; gap: 0.5rem; align-items: stretch;">
-            <select id="data_type" name="data_type">
-                @foreach ($types as $type)
-                    <option value="{{ $type }}" @selected($type === $selectedType)>{{ \App\Services\RequirementRules::TYPE_LABELS[$type] ?? $type }}</option>
-                @endforeach
-            </select>
-            <button type="submit" class="btn">Actualizar</button>
-        </div>
-        @error('data_type') <p class="field-error">{{ $message }}</p> @enderror
-    </fieldset>
-</form>
-
 <form method="POST" action="{{ $routeAction }}" class="card">
     @csrf
     @if ($isEdit)
         @method('PUT')
     @endif
 
-    <h2>Paso 2 — Datos del requerimiento</h2>
+    <h2>Datos del requerimiento</h2>
+
+    <label for="data_type">Tipo de dato</label>
+    <div style="display: flex; gap: 0.5rem; align-items: stretch;">
+        <select id="data_type" name="data_type">
+            @foreach ($types as $type)
+                <option value="{{ $type }}" @selected($type === $selectedType)>{{ \App\Services\RequirementRules::TYPE_LABELS[$type] ?? $type }}</option>
+            @endforeach
+        </select>
+        <button type="submit" formaction="{{ $routeRefresh }}" formnovalidate class="btn btn-secondary">Actualizar</button>
+    </div>
+    @error('data_type') <p class="field-error">{{ $message }}</p> @enderror
+    <p class="muted">Pulsa «Actualizar» para recargar los operadores y el campo de valor adecuados al tipo elegido. Lo que ya hayas tecleado se conserva.</p>
 
     <label for="field_key">Campo</label>
     <input id="field_key" type="text" name="field_key" value="{{ $fieldKey }}" maxlength="100" placeholder="por ejemplo: almacenamiento_gb" required>
@@ -72,6 +60,7 @@
     @error('value') <p class="field-error">{{ $message }}</p> @enderror
 
     <label style="font-weight: 600; margin-top: 1rem;">
+        <input type="hidden" name="mandatory" value="0">
         <input type="checkbox" name="mandatory" value="1" @checked((bool) $mandatory) style="margin-right: 0.4rem;">
         Condición obligatoria
     </label>

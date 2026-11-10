@@ -17,6 +17,7 @@
     'fieldKey' => $fieldKey,
     'routeTarget' => route('projects.requirements.create', $project),
     'routeAction' => route('projects.requirements.store', $project),
+    'routeRefresh' => route('projects.requirements.refresh', $project),
     'isEdit' => false,
     'submitLabel' => 'Guardar requerimiento',
 ])

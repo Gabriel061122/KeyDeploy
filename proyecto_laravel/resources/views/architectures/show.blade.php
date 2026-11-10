@@ -27,10 +27,10 @@
 </div>
 
 <div class="card">
-    <h2>Elementos y configuración ({{ $architecture->items->count() }})</h2>
+    <h2>Elementos ({{ $architecture->items->count() }})</h2>
     <table>
         <thead>
-            <tr><th>#</th><th>Producto</th><th>Proveedor</th><th>Tipo</th><th>Modalidad</th><th>Cantidad</th><th>Tarifa regional</th><th>Consumo mensual</th><th>Subtotal mensual</th><th>Cargo único</th><th>Configuración</th></tr>
+            <tr><th>#</th><th>Producto</th><th>Proveedor</th><th>Tipo</th><th>Modalidad</th><th>Cantidad</th><th>Tarifa regional</th><th>Consumo mensual</th><th>Subtotal mensual</th><th>Cargo único</th></tr>
         </thead>
         <tbody>
             @foreach ($architecture->items as $index => $item)
@@ -57,7 +57,6 @@
                     </td>
                     <td>{{ $line ? number_format($line['monthly_total_cents'] / 100, 2).' €/mes' : '—' }}</td>
                     <td>{{ $line ? number_format($line['one_time_total_cents'] / 100, 2).' €' : '—' }}</td>
-                    <td><pre class="config">{{ json_encode($item->config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</pre></td>
                 </tr>
             @endforeach
         </tbody>

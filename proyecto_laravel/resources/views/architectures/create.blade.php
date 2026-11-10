@@ -6,35 +6,11 @@
 <h1>Crear arquitectura manual en «{{ $project->name }}»</h1>
 
 {{--
-    Formulario 1 (GET): región. Recargar la página para ajustar el
-    listado de productos disponibles en la región (RN05) conservando
-    todos los datos ya introducidos mediante campos ocultos.
---}}
-<form method="GET" action="{{ route('projects.architectures.create', $project) }}" class="card">
-    <input type="hidden" name="name" value="{{ $name }}">
-    @for ($i = 0; $i < $slots; $i++)
-        <input type="hidden" name="items[{{ $i }}][product_id]" value="{{ $rowState[$i]['product_id'] }}">
-        <input type="hidden" name="items[{{ $i }}][quantity]" value="{{ $rowState[$i]['quantity'] }}">
-        <input type="hidden" name="items[{{ $i }}][config]" value="{{ $rowState[$i]['config'] }}">
-    @endfor
-    <label for="region_id">Región de la arquitectura</label>
-    <div style="display: flex; gap: 0.5rem; align-items: stretch;">
-        <select id="region_id" name="region_id">
-            <option value="">— Elige una región —</option>
-            @foreach ($regions as $region)
-                <option value="{{ $region->id }}" @selected((int) $region->id === $selectedRegionId)>{{ $region->name }} ({{ $region->code }}){{ $region->is_eu ? ' [UE]' : '' }}</option>
-            @endforeach
-        </select>
-        <button type="submit" class="btn">Actualizar</button>
-    </div>
-    @error('region_id') <p class="field-error">{{ $message }}</p> @enderror
-    <p class="muted">Al actualizar se muestra el catálogo disponible en la región elegida: productos retirados o no disponibles no podrán usarse (RN05).</p>
-</form>
-
-{{--
-    Formulario 2 (POST): envía el borrador a la revisión/previsualización.
-    Cada elemento necesita producto, cantidad entera >= 1 y configuración
-    JSON válida; el servidor exige al menos 3 elementos y 2 tipos.
+    Formulario único sin JavaScript. El botón «Actualizar» envía el mismo
+    formulario a la acción de recarga (POST) sin validación del navegador:
+    el servidor conserva todo lo tecleado y vuelve a mostrar el catálogo
+    disponible en la región elegida (RN05). El envío principal solo
+    revisa y previsualiza la arquitectura.
 --}}
 <form method="POST" action="{{ route('projects.architectures.review', $project) }}" class="card">
     @csrf
@@ -44,20 +20,28 @@
     <input id="name" type="text" name="name" value="{{ $name }}" maxlength="150" required>
     @error('name') <p class="field-error">{{ $message }}</p> @enderror
 
-    <label>Región (paso 1)</label>
-    <input type="hidden" name="region_id" value="{{ $selectedRegionId }}">
-    <input type="text" value="{{ $regions->firstWhere('id', $selectedRegionId)?->name ?? '— no seleccionada —' }}" disabled>
-    @if (! $selectedRegionId)
-        <p class="field-error">Elige la región en el paso 1 y pulsa «Actualizar».</p>
-    @endif
+    <label for="region_id">Región de la arquitectura</label>
+    <div style="display: flex; gap: 0.5rem; align-items: stretch;">
+        <select id="region_id" name="region_id">
+            <option value="">— Elige una región —</option>
+            @foreach ($regions as $region)
+                <option value="{{ $region->id }}" @selected((int) $region->id === $selectedRegionId)>{{ $region->name }} ({{ $region->code }}){{ $region->is_eu ? ' [UE]' : '' }}</option>
+            @endforeach
+        </select>
+        <button type="submit" formaction="{{ route('projects.architectures.refresh', $project) }}" formnovalidate class="btn btn-secondary">Actualizar</button>
+    </div>
+    @error('region_id') <p class="field-error">{{ $message }}</p> @enderror
+    <p class="muted">Al actualizar se muestra el catálogo disponible en la región elegida conservando el nombre, los productos, las cantidades y los consumos ya indicados. Los productos retirados o no disponibles no podrán usarse (RN05).</p>
 
-    @if ($products->isEmpty())
-        @if ($selectedRegionId)
-            <p class="field-error">No hay productos disponibles en la región seleccionada. Elige otra región y pulsa «Actualizar».</p>
-        @endif
+    @if (! $selectedRegionId)
+        <p class="field-error">Elige la región y pulsa «Actualizar» para cargar los productos disponibles.</p>
+    @elseif ($products->isEmpty())
+        <p class="field-error">No hay productos disponibles en la región seleccionada. Elige otra región y pulsa «Actualizar».</p>
     @endif
 
     <h2 style="margin-top: 1.5rem;">Elementos ({{ $slots }} huecos; se exigen al menos 3 y 2 tipos distintos)</h2>
+    <p class="muted">El consumo mensual es opcional en las tarifas fijas. En las tarifas por hora se indica en horas y en las tarifas por GB en GB; en esos casos es obligatorio y debe ser mayor que cero.</p>
+
     @for ($i = 0; $i < $slots; $i++)
         <fieldset class="slot">
             <legend>Elemento {{ $i + 1 }}</legend>
@@ -80,15 +64,17 @@
                     @error('items.'.$i.'.quantity') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
             </div>
-            <label for="config_{{ $i }}">Configuración JSON individual</label>
-            <textarea id="config_{{ $i }}" name="items[{{ $i }}][config]" placeholder='{"vcpu": 2, "ram_gb": 4, "hours_per_month": 40, "gb_per_month": 150}'>{{ $rowState[$i]['config'] }}</textarea>
-            <p class="muted">Incluye <code class="inline">hours_per_month</code> para tarifas por hora y <code class="inline">gb_per_month</code> para tarifas por GB. Deben ser números no negativos con hasta dos decimales.</p>
-            @error('items.'.$i.'.config') <p class="field-error">{{ $message }}</p> @enderror
+            <label for="usage_{{ $i }}">Consumo mensual</label>
+            <input id="usage_{{ $i }}" type="number" name="items[{{ $i }}][usage]" min="0" step="0.01" value="{{ $rowState[$i]['usage'] }}">
+            <p class="muted">Horas al mes para tarifas por hora, GB al mes para tarifas por GB. Se ignora en las tarifas fijas.</p>
+            @error('items.'.$i.'.usage') <p class="field-error">{{ $message }}</p> @enderror
         </fieldset>
     @endfor
 
     <div class="actions">
-        <button type="submit" class="btn">Revisar y previsualizar</button>
+        @if ($products->isNotEmpty())
+            <button type="submit" class="btn">Revisar y previsualizar</button>
+        @endif
         @if (session()->has(\App\Http\Controllers\ArchitectureController::DRAFT_KEY))
             <a class="btn btn-secondary" href="{{ route('projects.architectures.check', $project) }}">Ir a la revisión pendiente</a>
         @endif
